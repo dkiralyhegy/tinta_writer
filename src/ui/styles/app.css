@@ -1,0 +1,127 @@
+/* ─────────────────────────────────────────────────────────────────
+   tinta — chrome do app
+   Fundo bone (nunca branco), cantos quadrados, hairlines com labels
+   mono uppercase no topo e rodapé (motivo do brandbook), sem sombras
+   de elevação, motion só fade/translate com --ab-ease.
+   ─────────────────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: light;
+
+  /* tema claro: fundos do Monokai Pro Light (Filter Sun), extraídos do
+     tema instalado no VS Code do usuário (editor.background /
+     sideBar.background) — pedido explícito, sobrepõe o bone do DS */
+  --ab-bg: #f8efe7;
+  --tinta-panel-bg: #eee5de;
+
+  /* variáveis próprias do editor — o CodeMirror lê estas, o dark mode
+     e o acento trocam aqui sem reconfigurar o editor */
+  --tinta-editor-fg: var(--ab-fg);
+  --tinta-dim: rgba(34, 34, 35, 0.35);
+  --tinta-code-bg: rgba(34, 34, 35, 0.07);
+  --tinta-quote: var(--ab-steel);
+  --tinta-selection: rgba(183, 186, 175, 0.55);
+  --tinta-accent: var(--ab-ember);
+  --tinta-editor-pad-top: 56px;
+  --tinta-editor-pad-bottom: 40vh;
+  --tinta-hover-bg: rgba(34, 34, 35, 0.06);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ab-bg: var(--ab-ink);
+  --tinta-panel-bg: transparent;
+  --ab-fg: var(--ab-bone);
+  --ab-fg-muted: var(--ab-sage);
+  --ab-rule: var(--ab-bone);
+  --ab-rule-soft: rgba(237, 229, 211, 0.2);
+  --tinta-dim: rgba(237, 229, 211, 0.35);
+  --tinta-code-bg: rgba(237, 229, 211, 0.08);
+  --tinta-quote: #8fa6bc;
+  --tinta-selection: rgba(75, 101, 126, 0.5);
+  --tinta-hover-bg: rgba(237, 229, 211, 0.07);
+}
+
+:root[data-accent="ember"] { --tinta-accent: var(--ab-ember); }
+:root[data-accent="amber"] { --tinta-accent: var(--ab-amber); }
+:root[data-accent="steel"] { --tinta-accent: var(--ab-steel); }
+:root[data-accent="plum"] { --tinta-accent: var(--ab-plum); }
+:root[data-accent="moss"] { --tinta-accent: var(--ab-moss); }
+:root[data-accent="garnet"] { --tinta-accent: var(--ab-garnet); }
+
+/* acentos escuros ficam ilegíveis como cursor/destaque sobre ink */
+:root[data-theme="dark"][data-accent="plum"] { --tinta-accent: #9a6a82; }
+:root[data-theme="dark"][data-accent="garnet"] { --tinta-accent: #c25a70; }
+:root[data-theme="dark"][data-accent="steel"] { --tinta-accent: #7e9ab5; }
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--ab-bg);
+  color: var(--ab-fg);
+  font-family: var(--ab-font-mono);
+  font-size: var(--ab-size-body);
+  letter-spacing: var(--ab-tracking-mono);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  transition: background var(--ab-dur-base) var(--ab-ease);
+}
+
+/* label mono uppercase — o "eyebrow" do brandbook */
+.eyebrow {
+  font-family: var(--ab-font-mono);
+  font-size: var(--ab-size-eyebrow);
+  font-weight: var(--ab-w-regular);
+  letter-spacing: var(--ab-tracking-wide);
+  text-transform: uppercase;
+  line-height: 1;
+  color: var(--ab-fg);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--ab-radius-0);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--ab-sage);
+  outline-offset: 3px;
+}
+
+input,
+select {
+  font: inherit;
+  color: var(--ab-fg);
+  background: transparent;
+  border: 1px solid var(--ab-rule-soft);
+  border-radius: var(--ab-radius-1);
+  padding: 4px 8px;
+}
+
+/* typewriter: padding extra permite centralizar primeira/última linha */
+.tinta-typewriter .cm-content {
+  padding-top: 42vh !important;
+  padding-bottom: 50vh !important;
+}
+
+/* seleção de texto dentro do editor */
+.cm-editor ::selection {
+  background: var(--tinta-selection);
+}

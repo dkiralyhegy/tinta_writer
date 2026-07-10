@@ -1,0 +1,100 @@
+/* ─────────────────────────────────────────────────────────────────
+   Estúdio AB — design tokens
+   Cópia de colors_and_type.css (brandbook 2025-01), sem os @font-face
+   (movidos para fonts.css com caminhos locais do projeto).
+   ─────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ───── Primary palette (neutrals) ───────────────────────────── */
+  --ab-ink: #222223;
+  --ab-bark: #453b32;
+  --ab-sage: #b7baaf;
+  --ab-bone: #ede5d3;
+
+  /* ───── Secondary palette (accents) ──────────────────────────── */
+  --ab-ember: #bf4128;
+  --ab-amber: #eea244;
+  --ab-steel: #4b657e;
+  --ab-plum: #582d40;
+  --ab-moss: #89993e;
+  --ab-garnet: #8a1d33;
+
+  /* ───── Semantic surfaces ────────────────────────────────────── */
+  --ab-bg: var(--ab-bone);
+  --ab-bg-sage: var(--ab-sage);
+  --ab-bg-ink: var(--ab-ink);
+  --ab-fg: var(--ab-ink);
+  --ab-fg-muted: #45463f;
+  --ab-fg-inv: var(--ab-bone);
+  --ab-rule: var(--ab-ink);
+  --ab-rule-soft: rgba(34, 34, 35, 0.18);
+
+  /* ───── Typography ───────────────────────────────────────────── */
+  --ab-font-sans: "Neue Haas Grotesk Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --ab-font-mono: "Calling Code", "Sometype Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --ab-font-display: var(--ab-font-sans);
+
+  --ab-w-thin: 200;
+  --ab-w-regular: 400;
+  --ab-w-medium: 500;
+  --ab-w-bold: 700;
+
+  --ab-tracking-tight: -0.02em;
+  --ab-tracking-normal: 0;
+  --ab-tracking-wide: 0.08em;
+  --ab-tracking-mono: 0.02em;
+
+  --ab-leading-tight: 1.05;
+  --ab-leading-snug: 1.25;
+  --ab-leading-body: 1.5;
+
+  --ab-size-display: clamp(64px, 10vw, 160px);
+  --ab-size-h1: clamp(40px, 5vw, 72px);
+  --ab-size-h2: clamp(28px, 3.4vw, 44px);
+  --ab-size-h3: 20px;
+  --ab-size-body: 15px;
+  --ab-size-small: 13px;
+  --ab-size-eyebrow: 11px;
+
+  /* ───── Spacing (8pt scale) ──────────────────────────────────── */
+  --ab-space-1: 4px;
+  --ab-space-2: 8px;
+  --ab-space-3: 12px;
+  --ab-space-4: 16px;
+  --ab-space-5: 24px;
+  --ab-space-6: 32px;
+  --ab-space-7: 48px;
+  --ab-space-8: 64px;
+  --ab-space-9: 96px;
+  --ab-space-10: 128px;
+
+  /* ───── Radii — squared identity, used sparingly ─────────────── */
+  --ab-radius-0: 0px;
+  --ab-radius-1: 2px;
+  --ab-radius-2: 4px;
+  --ab-radius-pill: 999px;
+
+  /* ───── Borders & rules ──────────────────────────────────────── */
+  --ab-border-hair: 1px solid var(--ab-rule);
+  --ab-border-soft: 1px solid var(--ab-rule-soft);
+
+  /* ───── Elevation — flat brand, very minimal shadow ──────────── */
+  --ab-shadow-0: none;
+  --ab-shadow-1: 0 1px 0 rgba(34, 34, 35, 0.12);
+  --ab-shadow-2: 0 8px 24px rgba(34, 34, 35, 0.1);
+
+  /* ───── Signature gradient ───────────────────────────────────── */
+  --ab-gradient-signature:
+    radial-gradient(70% 110% at -5% 70%, var(--ab-steel) 0%, transparent 55%),
+    radial-gradient(50% 130% at -2% 25%, var(--ab-plum) 0%, transparent 60%),
+    radial-gradient(45% 130% at 102% 50%, var(--ab-amber) 0%, transparent 55%),
+    radial-gradient(80% 60% at 55% 130%, var(--ab-moss) 0%, transparent 75%),
+    var(--ab-sage);
+
+  /* Motion */
+  --ab-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ab-ease-quick: cubic-bezier(0.4, 0, 0.2, 1);
+  --ab-dur-fast: 140ms;
+  --ab-dur-base: 240ms;
+  --ab-dur-slow: 520ms;
+}

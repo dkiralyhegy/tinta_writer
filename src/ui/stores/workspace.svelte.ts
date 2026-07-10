@@ -1,0 +1,345 @@
+import type { Library } from "../../domain/entities/library";
+import type { Note } from "../../domain/entities/note";
+import {
+  DEFAULT_THEME,
+  normalizeTheme,
+  type ThemeConfig,
+} from "../../domain/entities/theme-config";
+import {
+  DEFAULT_GOALS,
+  normalizeGoals,
+  type Goals,
+} from "../../domain/entities/writing-stats";
+import { goalProgressOf } from "../../domain/services/stats-calculator";
+import { countChars, countWords } from "../../domain/services/word-count";
+import type { Clock } from "../../application/ports/clock";
+import type { NoteRepository } from "../../application/ports/note-repository";
+import type { PersistedSettings, SettingsStore } from "../../application/ports/settings-store";
+import { Autosave } from "../../application/use-cases/autosave";
+import { createTodayNote } from "../../application/use-cases/create-today-note";
+import { loadLibrary } from "../../application/use-cases/load-library";
+import { openNote } from "../../application/use-cases/open-note";
+import { pruneSnapshots } from "../../application/use-cases/prune-snapshots";
+import { saveNote } from "../../application/use-cases/save-note";
+import type { ProgressTracker } from "../../application/use-cases/track-progress";
+import type { CmEditor } from "../../infrastructure/codemirror/editor";
+
+export type SaveState = "idle" | "pending" | "saved" | "error" | "conflict";
+
+export interface WorkspaceDeps {
+  repo: NoteRepository;
+  settingsStore: SettingsStore;
+  tracker: ProgressTracker;
+  clock: Clock;
+  /** abre o dialog nativo de escolher pasta; null se cancelado */
+  pickFolder: () => Promise<string | null>;
+}
+
+/**
+ * Estado reativo do app. Camada fina: toda decisão de negócio mora nos
+ * use cases — aqui só orquestração e estado de tela.
+ */
+export class Workspace {
+  library = $state<Library | null>(null);
+  note = $state<Note | null>(null);
+  theme = $state<ThemeConfig>(DEFAULT_THEME);
+  goals = $state<Goals>(DEFAULT_GOALS);
+  sidebarOpen = $state(true);
+  settingsOpen = $state(false);
+  /** modo zen: esconde todo o chrome, só a coluna de texto (não persistido) */
+  zenMode = $state(false);
+  saveState = $state<SaveState>("idle");
+  conflictNotice = $state<string | null>(null);
+  wordsTotal = $state(0);
+  charsTotal = $state(0);
+  wordsToday = $state(0);
+  ready = $state(false);
+
+  private editor: CmEditor | null = null;
+  private autosave: Autosave;
+  private snapshottedThisSession = new Set<string>();
+  private countTimer: ReturnType<typeof setTimeout> | null = null;
+  private persistTimer: ReturnType<typeof setTimeout> | null = null;
+  private systemDark: MediaQueryList | null = null;
+
+  constructor(private readonly deps: WorkspaceDeps) {
+    this.autosave = new Autosave(() => this.persistCurrentNote(), 1000);
+  }
+
+  // ── ciclo de vida ────────────────────────────────────────────────
+
+  async init(): Promise<void> {
+    const raw = (await this.deps.settingsStore.load()) as Partial<PersistedSettings> | null;
+    this.theme = normalizeTheme(raw?.theme);
+    this.goals = normalizeGoals(raw?.goals);
+    this.sidebarOpen = raw?.sidebarOpen ?? true;
+    this.applyThemeToDom();
+
+    await this.deps.tracker.init();
+    this.wordsToday = this.deps.tracker.wordsToday();
+
+    const rootPath = raw?.rootPath ?? null;
+    if (rootPath) {
+      try {
+        await this.attachRoot(rootPath);
+        if (raw?.lastNotePath) await this.openPath(raw.lastNotePath);
+      } catch {
+        // pasta sumiu/renomeada — volta ao estado "escolher pasta"
+        this.library = null;
+      }
+    }
+    this.ready = true;
+  }
+
+  attachEditor(editor: CmEditor): void {
+    this.editor = editor;
+    if (this.note) editor.openDocument(this.note.path, this.note.content);
+  }
+
+  /** flush duplo em blur/quit: nota + estatísticas */
+  async flushAll(): Promise<void> {
+    await this.autosave.flushNow().catch(() => {});
+    await this.deps.tracker.flush().catch(() => {});
+  }
+
+  // ── biblioteca ───────────────────────────────────────────────────
+
+  async chooseRoot(): Promise<void> {
+    const folder = await this.deps.pickFolder();
+    if (!folder) return;
+    await this.flushAll();
+    this.note = null;
+    await this.attachRoot(folder);
+    this.persistSettings();
+  }
+
+  private async attachRoot(rootPath: string): Promise<void> {
+    this.library = await loadLibrary(this.deps.repo, rootPath);
+    await this.deps.repo.watch(rootPath, (paths) => void this.onExternalChange(paths));
+    // retenção de snapshots em background — não bloqueia o startup
+    void pruneSnapshots(this.deps.repo, this.deps.clock, rootPath).catch(() => {});
+  }
+
+  async refreshLibrary(): Promise<void> {
+    if (!this.library) return;
+    this.library = await loadLibrary(this.deps.repo, this.library.rootPath);
+  }
+
+  // ── notas ────────────────────────────────────────────────────────
+
+  async openPath(path: string): Promise<void> {
+    await this.autosave.flushNow().catch(() => {});
+    const note = await openNote(this.deps.repo, path);
+    this.note = note;
+    this.saveState = "idle";
+    this.conflictNotice = null;
+    this.editor?.openDocument(note.path, note.content);
+    this.recount(note.content);
+    this.persistSettings();
+  }
+
+  async openToday(): Promise<void> {
+    if (!this.library) return;
+    const path = await createTodayNote(this.deps.repo, this.deps.clock, this.library.rootPath);
+    await this.refreshLibrary();
+    await this.openPath(path);
+  }
+
+  async createNote(dirPath: string, name: string): Promise<void> {
+    const clean = name.trim().replace(/\.md$/i, "");
+    if (!clean) return;
+    const path = `${dirPath}/${clean}.md`;
+    await this.deps.repo.create(path, "");
+    await this.refreshLibrary();
+    await this.openPath(path);
+  }
+
+  async createFolder(dirPath: string, name: string): Promise<void> {
+    const clean = name.trim();
+    if (!clean) return;
+    await this.deps.repo.createFolder(`${dirPath}/${clean}`);
+    await this.refreshLibrary();
+  }
+
+  async renameNote(path: string, newName: string): Promise<void> {
+    const clean = newName.trim().replace(/\.md$/i, "");
+    if (!clean) return;
+    const dir = path.slice(0, path.lastIndexOf("/"));
+    const ext = path.slice(path.lastIndexOf("."));
+    const to = `${dir}/${clean}${ext}`;
+    if (to === path) return;
+    await this.autosave.flushNow().catch(() => {});
+    await this.deps.repo.rename(path, to);
+    this.editor?.forget(path);
+    if (this.note?.path === path) await this.openPath(to);
+    await this.refreshLibrary();
+  }
+
+  async deleteNote(path: string): Promise<void> {
+    await this.deps.repo.delete(path);
+    this.editor?.forget(path);
+    if (this.note?.path === path) {
+      this.note = null;
+      this.saveState = "idle";
+    }
+    await this.refreshLibrary();
+  }
+
+  // ── edição / autosave ────────────────────────────────────────────
+
+  /** chamado pelo CmEditor a cada transação que muda o doc */
+  onDocChanged(getText: () => string, wordDelta: number): void {
+    const note = this.note;
+    if (!note) return;
+
+    // primeira modificação da sessão nesta nota → snapshot da versão em disco
+    if (!this.snapshottedThisSession.has(note.path) && this.library) {
+      this.snapshottedThisSession.add(note.path);
+      void this.deps.repo.snapshot(this.library.rootPath, note.path).catch(() => {});
+    }
+
+    this.deps.tracker.recordDelta(note.path, wordDelta);
+    this.wordsToday = this.deps.tracker.wordsToday();
+    this.saveState = "pending";
+    this.autosave.markDirty();
+    this.scheduleRecount(getText);
+  }
+
+  async saveNow(): Promise<void> {
+    await this.autosave.flushNow().catch(() => {});
+  }
+
+  private async persistCurrentNote(): Promise<void> {
+    const note = this.note;
+    const editor = this.editor;
+    if (!note || !editor) return;
+
+    try {
+      const outcome = await saveNote(this.deps.repo, note, editor.currentText());
+      if (outcome.conflictPath) {
+        // o disco mudou por fora: nossa edição foi preservada no .conflict —
+        // seguimos editando NELE; o arquivo original fica com a versão externa
+        this.conflictNotice = `O arquivo mudou fora do tinta. Suas alterações seguem aqui, salvas como ${outcome.conflictPath.split("/").pop()}.`;
+        this.saveState = "conflict";
+        this.editor?.forget(note.path);
+        const conflictNote = await openNote(this.deps.repo, outcome.conflictPath);
+        this.note = conflictNote;
+        this.editor?.openDocument(conflictNote.path, conflictNote.content);
+        await this.refreshLibrary();
+      } else {
+        this.note = outcome.note;
+        if (this.saveState !== "pending" || !this.autosave.isDirty) this.saveState = "saved";
+      }
+      void this.deps.tracker.flush().catch(() => {});
+    } catch (err) {
+      this.saveState = "error";
+      throw err;
+    }
+  }
+
+  private async onExternalChange(paths: string[]): Promise<void> {
+    await this.refreshLibrary();
+    const current = this.note;
+    if (!current || !paths.includes(current.path)) return;
+
+    if (this.saveState === "pending" || this.autosave.isDirty) {
+      // há edição não salva — o próximo save detecta o conflito via mtime
+      return;
+    }
+    // sem edição pendente: recarrega silenciosamente a versão nova
+    try {
+      this.editor?.forget(current.path);
+      const fresh = await openNote(this.deps.repo, current.path);
+      this.note = fresh;
+      this.editor?.openDocument(fresh.path, fresh.content);
+      this.recount(fresh.content);
+    } catch {
+      // arquivo apagado por fora
+      this.note = null;
+    }
+  }
+
+  // ── contagem ─────────────────────────────────────────────────────
+
+  private scheduleRecount(getText: () => string): void {
+    if (this.countTimer) clearTimeout(this.countTimer);
+    this.countTimer = setTimeout(() => {
+      this.countTimer = null;
+      this.recount(getText());
+    }, 400);
+  }
+
+  private recount(text: string): void {
+    this.wordsTotal = countWords(text);
+    this.charsTotal = countChars(text);
+  }
+
+  // ── tema / settings ──────────────────────────────────────────────
+
+  updateTheme(partial: Partial<ThemeConfig>): void {
+    this.theme = normalizeTheme({ ...this.theme, ...partial });
+    this.applyThemeToDom();
+    this.editor?.applyConfig(this.theme);
+    this.persistSettings();
+  }
+
+  updateGoals(partial: Partial<Goals>): void {
+    this.goals = normalizeGoals({ ...this.goals, ...partial });
+    this.persistSettings();
+  }
+
+  toggleSidebar(): void {
+    this.sidebarOpen = !this.sidebarOpen;
+    this.persistSettings();
+  }
+
+  cycleFocusMode(): void {
+    const order = ["off", "sentence", "paragraph"] as const;
+    const next = order[(order.indexOf(this.theme.focusMode) + 1) % order.length]!;
+    this.updateTheme({ focusMode: next });
+  }
+
+  toggleTypewriter(): void {
+    this.updateTheme({ typewriter: !this.theme.typewriter });
+  }
+
+  toggleZen(): void {
+    this.zenMode = !this.zenMode;
+    this.editor?.focus();
+  }
+
+  get goalProgress() {
+    const target = this.goals.dailyWords;
+    if (!target) return null;
+    // deriva do $state reativo (o tracker é infraestrutura não-reativa)
+    return goalProgressOf(this.wordsToday, target);
+  }
+
+  private applyThemeToDom(): void {
+    const root = document.documentElement;
+    root.dataset.accent = this.theme.accent;
+
+    if (!this.systemDark) {
+      this.systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+      this.systemDark.addEventListener("change", () => this.applyThemeToDom());
+    }
+    const dark =
+      this.theme.mode === "dark" || (this.theme.mode === "system" && this.systemDark.matches);
+    root.dataset.theme = dark ? "dark" : "light";
+  }
+
+  private persistSettings(): void {
+    if (this.persistTimer) clearTimeout(this.persistTimer);
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = null;
+      const snapshot: PersistedSettings = {
+        theme: { ...this.theme },
+        goals: { ...this.goals },
+        rootPath: this.library?.rootPath ?? null,
+        lastNotePath: this.note?.path ?? null,
+        sidebarOpen: this.sidebarOpen,
+      };
+      void this.deps.settingsStore.save(snapshot).catch(() => {});
+    }, 300);
+  }
+}

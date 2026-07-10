@@ -254,7 +254,7 @@
   .fontopt.on {
     color: var(--ab-fg);
     border-color: var(--ab-rule);
-    box-shadow: inset 2px 0 0 var(--tinta-accent);
+    box-shadow: inset 4px 0 0 var(--tinta-accent);
   }
 
   input[type="range"] {
@@ -270,8 +270,8 @@
   }
 
   .swatch {
-    width: 24px;
-    height: 24px;
+    width: 30px;
+    height: 30px;
     border: 1px solid transparent;
   }
 

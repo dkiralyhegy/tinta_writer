@@ -44,6 +44,15 @@
   <div class="cell right">
     {#if modeLabel}<span class="dim">{modeLabel}</span>{/if}
     <span class="save" data-state={workspace.saveState}>{saveLabel}</span>
+    <span class="help" tabindex="0" aria-label="atalhos de teclado">
+      ⌘
+      <div class="pop" role="tooltip">
+        <p class="pop-title">atalhos</p>
+        {#each [["⌘S", "salvar agora"], ["⌘J", "nota de hoje"], ["⌘F", "buscar no texto"], ["⌘D", "modo foco (ciclar)"], ["⌘T", "typewriter"], ["⌘\\", "sidebar"], ["⌘⇧F", "modo zen — esc sai"], ["⌘,", "ajustes"]] as [k, label] (k)}
+          <div class="row"><span class="key">{k}</span><span class="what">{label}</span></div>
+        {/each}
+      </div>
+    </span>
   </div>
 </footer>
 
@@ -94,8 +103,8 @@
   }
 
   .bar {
-    width: 96px;
-    height: 2px;
+    width: 120px;
+    height: 4px;
     background: var(--ab-rule-soft);
     display: inline-block;
   }
@@ -110,5 +119,69 @@
   .save[data-state="error"],
   .save[data-state="conflict"] {
     color: var(--tinta-accent);
+  }
+
+  /* glifo discreto — hover/focus revela o painel de atalhos */
+  .help {
+    position: relative;
+    color: var(--tinta-dim);
+    cursor: default;
+    padding: 4px 2px;
+  }
+
+  .help:hover,
+  .help:focus-visible {
+    color: var(--ab-fg);
+  }
+
+  .pop {
+    position: absolute;
+    bottom: 24px;
+    right: 0;
+    width: max-content;
+    background: var(--ab-fg);
+    color: var(--ab-bg);
+    padding: var(--ab-space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--ab-space-2);
+    text-transform: none;
+    letter-spacing: var(--ab-tracking-mono);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(4px);
+    transition:
+      opacity var(--ab-dur-fast) var(--ab-ease),
+      transform var(--ab-dur-fast) var(--ab-ease),
+      visibility 0s linear var(--ab-dur-fast);
+    z-index: 10;
+  }
+
+  .help:hover .pop,
+  .help:focus-visible .pop {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    transition:
+      opacity var(--ab-dur-fast) var(--ab-ease),
+      transform var(--ab-dur-fast) var(--ab-ease);
+  }
+
+  .pop-title {
+    text-transform: uppercase;
+    letter-spacing: var(--ab-tracking-wide);
+    opacity: 0.6;
+    margin-bottom: var(--ab-space-1);
+  }
+
+  .row {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--ab-space-5);
+  }
+
+  .key {
+    opacity: 0.7;
+    min-width: 3.5ch;
   }
 </style>

@@ -71,7 +71,7 @@
     {/if}
 
     <main class="editor-area">
-      {#if workspace.ready && !workspace.library}
+      {#if workspace.ready && !workspace.library && !workspace.note}
         <div class="empty">
           <p class="empty-title">tinta</p>
           <p class="empty-sub">escolha a pasta onde seus textos vivem</p>
@@ -102,6 +102,12 @@
 
   {#if !workspace.zenMode}
     <StatusBar {workspace} />
+  {/if}
+
+  {#if workspace.hud}
+    {#key workspace.hud.id}
+      <div class="hud eyebrow" role="status">{workspace.hud.label}</div>
+    {/key}
   {/if}
 </div>
 
@@ -137,6 +143,35 @@
     left: 0;
     right: 0;
     z-index: 3;
+  }
+
+  /* aviso efêmero de modo — canto inferior direito, some sozinho */
+  .hud {
+    position: absolute;
+    right: var(--ab-space-4);
+    bottom: 46px;
+    background: var(--ab-fg);
+    color: var(--ab-bg);
+    padding: var(--ab-space-2) var(--ab-space-3);
+    pointer-events: none;
+    z-index: 20;
+    animation: hud-life 1.7s var(--ab-ease) both;
+  }
+
+  @keyframes hud-life {
+    0% {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    10%,
+    80% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(0);
+    }
   }
 
   .body {

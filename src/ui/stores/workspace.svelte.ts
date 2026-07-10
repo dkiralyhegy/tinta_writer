@@ -23,6 +23,7 @@ import { pruneSnapshots } from "../../application/use-cases/prune-snapshots";
 import { saveNote } from "../../application/use-cases/save-note";
 import type { ProgressTracker } from "../../application/use-cases/track-progress";
 import type { CmEditor } from "../../infrastructure/codemirror/editor";
+import { GUIDE_PATH, GUIDE_TEXT, GUIDE_TITLE } from "../content/guide";
 
 export type SaveState = "idle" | "pending" | "saved" | "error" | "conflict";
 
@@ -48,6 +49,8 @@ export class Workspace {
   settingsOpen = $state(false);
   /** modo zen: esconde todo o chrome, só a coluna de texto (não persistido) */
   zenMode = $state(false);
+  /** aviso efêmero de troca de modo (⌘D/⌘T/⌘⇧F) — id força reanimação */
+  hud = $state<{ label: string; id: number } | null>(null);
   saveState = $state<SaveState>("idle");
   conflictNotice = $state<string | null>(null);
   wordsTotal = $state(0);
@@ -60,6 +63,8 @@ export class Workspace {
   private snapshottedThisSession = new Set<string>();
   private countTimer: ReturnType<typeof setTimeout> | null = null;
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
+  private hudTimer: ReturnType<typeof setTimeout> | null = null;
+  private hudSeq = 0;
   private systemDark: MediaQueryList | null = null;
 
   constructor(private readonly deps: WorkspaceDeps) {
@@ -70,6 +75,7 @@ export class Workspace {
 
   async init(): Promise<void> {
     const raw = (await this.deps.settingsStore.load()) as Partial<PersistedSettings> | null;
+    const firstLaunch = raw === null;
     this.theme = normalizeTheme(raw?.theme);
     this.goals = normalizeGoals(raw?.goals);
     this.sidebarOpen = raw?.sidebarOpen ?? true;
@@ -88,7 +94,29 @@ export class Workspace {
         this.library = null;
       }
     }
+    if (firstLaunch) this.openGuide();
     this.ready = true;
+  }
+
+  /** Guia inicial: nota virtual, editável mas nunca salva. */
+  openGuide(): void {
+    void this.autosave.flushNow().catch(() => {});
+    this.note = {
+      path: GUIDE_PATH,
+      title: GUIDE_TITLE,
+      content: GUIDE_TEXT,
+      mtimeMs: 0,
+    };
+    this.saveState = "idle";
+    this.conflictNotice = null;
+    // sem cache: reabrir o guia sempre volta ao texto original
+    this.editor?.forget(GUIDE_PATH);
+    this.editor?.openDocument(GUIDE_PATH, GUIDE_TEXT);
+    this.recount(GUIDE_TEXT);
+  }
+
+  private isGuide(path: string | undefined): boolean {
+    return path === GUIDE_PATH;
   }
 
   attachEditor(editor: CmEditor): void {
@@ -192,6 +220,12 @@ export class Workspace {
     const note = this.note;
     if (!note) return;
 
+    // o guia é playground: recontagem sim, save/stats/snapshot não
+    if (this.isGuide(note.path)) {
+      this.scheduleRecount(getText);
+      return;
+    }
+
     // primeira modificação da sessão nesta nota → snapshot da versão em disco
     if (!this.snapshottedThisSession.has(note.path) && this.library) {
       this.snapshottedThisSession.add(note.path);
@@ -212,7 +246,7 @@ export class Workspace {
   private async persistCurrentNote(): Promise<void> {
     const note = this.note;
     const editor = this.editor;
-    if (!note || !editor) return;
+    if (!note || !editor || this.isGuide(note.path)) return;
 
     try {
       const outcome = await saveNote(this.deps.repo, note, editor.currentText());
@@ -297,15 +331,29 @@ export class Workspace {
     const order = ["off", "sentence", "paragraph"] as const;
     const next = order[(order.indexOf(this.theme.focusMode) + 1) % order.length]!;
     this.updateTheme({ focusMode: next });
+    const label = { off: "desligado", sentence: "sentença", paragraph: "parágrafo" }[next];
+    this.showHud(`foco: ${label}`);
   }
 
   toggleTypewriter(): void {
     this.updateTheme({ typewriter: !this.theme.typewriter });
+    this.showHud(`typewriter: ${this.theme.typewriter ? "ligado" : "desligado"}`);
   }
 
   toggleZen(): void {
     this.zenMode = !this.zenMode;
     this.editor?.focus();
+    this.showHud(this.zenMode ? "zen: ligado — esc sai" : "zen: desligado");
+  }
+
+  /** mostra um aviso efêmero no canto; some sozinho */
+  private showHud(label: string): void {
+    if (this.hudTimer) clearTimeout(this.hudTimer);
+    this.hud = { label, id: ++this.hudSeq };
+    this.hudTimer = setTimeout(() => {
+      this.hudTimer = null;
+      this.hud = null;
+    }, 1700);
   }
 
   get goalProgress() {
@@ -336,7 +384,8 @@ export class Workspace {
         theme: { ...this.theme },
         goals: { ...this.goals },
         rootPath: this.library?.rootPath ?? null,
-        lastNotePath: this.note?.path ?? null,
+        // o guia é virtual — nunca pode ser o "última nota" de um relaunch
+        lastNotePath: this.isGuide(this.note?.path) ? null : (this.note?.path ?? null),
         sidebarOpen: this.sidebarOpen,
       };
       void this.deps.settingsStore.save(snapshot).catch(() => {});

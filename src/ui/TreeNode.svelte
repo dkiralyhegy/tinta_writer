@@ -130,7 +130,7 @@
   .row.active {
     color: var(--ab-fg);
     background: var(--tinta-hover-bg);
-    box-shadow: inset 2px 0 0 var(--tinta-accent);
+    box-shadow: inset 4px 0 0 var(--tinta-accent);
   }
 
   .row.dir {

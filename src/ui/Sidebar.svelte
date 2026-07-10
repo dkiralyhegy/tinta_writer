@@ -62,6 +62,7 @@
 
   <div class="foot">
     <button class="tool" onclick={() => void workspace.chooseRoot()}>trocar pasta</button>
+    <button class="tool" onclick={() => workspace.openGuide()}>guia</button>
     <button class="tool" onclick={() => (workspace.settingsOpen = !workspace.settingsOpen)}>
       ajustes
     </button>

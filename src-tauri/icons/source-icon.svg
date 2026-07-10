@@ -1,9 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- tinta — gota de tinta bone sobre ink, cantos quadrados (Estúdio AB) -->
+  <!-- tinta — gota de tinta bone sobre ink (Estúdio AB)
+       bico da gota suavizado; barra inferior em pill (linha de tinta) -->
   <rect width="1024" height="1024" fill="#222223"/>
-  <path fill="#EDE5D3" d="M512 208
-    C512 208 316 470 316 636
-    a196 196 0 0 0 392 0
-    C708 470 512 208 512 208 Z"/>
-  <rect x="316" y="792" width="392" height="24" fill="#EDE5D3"/>
+  <path fill="#EDE5D3" d="M512 176
+    C498 202 332 436 332 600
+    a180 180 0 0 0 360 0
+    C692 436 526 202 512 176 Z"/>
+  <rect x="312" y="812" width="400" height="28" rx="14" fill="#EDE5D3"/>
 </svg>

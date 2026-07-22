@@ -77,3 +77,5 @@ Settings e estatísticas: JSON em
   antes de distribuir).
 - **Calling Code** — mono do design system (sem itálico; o WebKit sintetiza).
 - **iA Writer Duo** — SIL OFL, com itálico real; opção de fonte do editor.
+- **EB Garamond** — SIL OFL; serifada de livro (linhagem Garamond, a mesma
+  da Sabon). Se um dia a Sabon for licenciada, basta trocar os arquivos.

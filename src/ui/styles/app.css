@@ -115,6 +115,91 @@ select {
   padding: 4px 8px;
 }
 
+/* realce de classes gramaticais (estilo iA Writer) */
+:root {
+  --tinta-pos-noun: var(--ab-ember);
+  --tinta-pos-verb: var(--ab-steel);
+  --tinta-pos-adj: #a8701a;
+  --tinta-pos-adv: var(--ab-plum);
+  --tinta-pos-conj: #6e7b32;
+}
+
+:root[data-theme="dark"] {
+  --tinta-pos-noun: #d2694f;
+  --tinta-pos-verb: #7e9ab5;
+  --tinta-pos-adj: var(--ab-amber);
+  --tinta-pos-adv: #9a6a82;
+  --tinta-pos-conj: #a9b863;
+}
+
+.cm-pos-noun { color: var(--tinta-pos-noun); }
+.cm-pos-verb { color: var(--tinta-pos-verb); }
+.cm-pos-adj { color: var(--tinta-pos-adj); }
+.cm-pos-adv { color: var(--tinta-pos-adv); }
+.cm-pos-conj { color: var(--tinta-pos-conj); }
+
+/* style check — risco visual em muletas, redundâncias e clichês */
+.cm-style-muleta,
+.cm-style-redundancia,
+.cm-style-cliche {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
+.cm-style-muleta { text-decoration-color: var(--tinta-dim); }
+.cm-style-redundancia { text-decoration-color: #a8701a; }
+.cm-style-cliche { text-decoration-color: var(--ab-garnet); }
+
+:root[data-theme="dark"] .cm-style-redundancia { text-decoration-color: var(--ab-amber); }
+:root[data-theme="dark"] .cm-style-cliche { text-decoration-color: #c25a70; }
+
+/* gramática (LanguageTool) — sublinhado ondulado + tooltip de sugestões */
+.cm-lt-issue {
+  text-decoration: underline wavy var(--ab-garnet);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+:root[data-theme="dark"] .cm-lt-issue {
+  text-decoration-color: #c25a70;
+}
+
+.tinta-lt-tooltip {
+  background: var(--ab-fg);
+  color: var(--ab-bg);
+  padding: var(--ab-space-3);
+  max-width: 320px;
+  font-family: var(--ab-font-mono);
+  font-size: var(--ab-size-small);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ab-space-2);
+}
+
+.tinta-lt-message {
+  line-height: var(--ab-leading-snug);
+}
+
+.tinta-lt-fix {
+  text-align: left;
+  border: 1px solid color-mix(in srgb, var(--ab-bg) 35%, transparent);
+  padding: 4px 8px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tinta-lt-fix:hover {
+  background: var(--ab-bg);
+  color: var(--ab-fg);
+}
+
+/* o tooltip do CM6 vem com chrome próprio — zera para o nosso */
+.cm-tooltip:has(.tinta-lt-tooltip) {
+  border: none;
+  background: transparent;
+}
+
 /* typewriter: padding extra permite centralizar primeira/última linha */
 .tinta-typewriter .cm-content {
   padding-top: 42vh !important;

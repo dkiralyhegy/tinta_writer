@@ -5,6 +5,7 @@ export type FocusMode = "off" | "sentence" | "paragraph";
 export const EDITOR_FONTS = [
   "Calling Code",
   "iA Writer Duo",
+  "EB Garamond",
   "Neue Haas Grotesk Display",
 ] as const;
 
@@ -26,6 +27,21 @@ export interface ThemeConfig {
   accent: Accent;
   focusMode: FocusMode;
   typewriter: boolean;
+  /** ortografia nativa do macOS (sublinhado vermelho) */
+  spellcheck: boolean;
+  /** autocorreção nativa do macOS */
+  autocorrect: boolean;
+  /** realce de classes gramaticais (estilo iA Writer, léxico local) */
+  posHighlight: boolean;
+  posNoun: boolean;
+  posVerb: boolean;
+  posAdj: boolean;
+  posAdv: boolean;
+  posConj: boolean;
+  /** riscar muletas, redundâncias e clichês */
+  styleCheck: boolean;
+  /** gramática via LanguageTool — envia texto para API online; opt-in explícito */
+  grammarCheck: boolean;
 }
 
 export const DEFAULT_THEME: ThemeConfig = {
@@ -38,6 +54,16 @@ export const DEFAULT_THEME: ThemeConfig = {
   accent: "ember",
   focusMode: "off",
   typewriter: false,
+  spellcheck: true,
+  autocorrect: true,
+  posHighlight: false,
+  posNoun: true,
+  posVerb: true,
+  posAdj: true,
+  posAdv: true,
+  posConj: true,
+  styleCheck: false,
+  grammarCheck: false,
 };
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
@@ -47,6 +73,8 @@ export function normalizeTheme(raw: unknown): ThemeConfig {
   const r = (raw ?? {}) as Partial<Record<keyof ThemeConfig, unknown>>;
   const pick = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
     allowed.includes(value as T) ? (value as T) : fallback;
+  const bool = (value: unknown, fallback: boolean): boolean =>
+    typeof value === "boolean" ? value : fallback;
 
   return {
     mode: pick(r.mode, ["light", "dark", "system"], DEFAULT_THEME.mode),
@@ -57,6 +85,16 @@ export function normalizeTheme(raw: unknown): ThemeConfig {
     justified: typeof r.justified === "boolean" ? r.justified : DEFAULT_THEME.justified,
     accent: pick(r.accent, ACCENTS, DEFAULT_THEME.accent),
     focusMode: pick(r.focusMode, ["off", "sentence", "paragraph"], DEFAULT_THEME.focusMode),
-    typewriter: typeof r.typewriter === "boolean" ? r.typewriter : DEFAULT_THEME.typewriter,
+    typewriter: bool(r.typewriter, DEFAULT_THEME.typewriter),
+    spellcheck: bool(r.spellcheck, DEFAULT_THEME.spellcheck),
+    autocorrect: bool(r.autocorrect, DEFAULT_THEME.autocorrect),
+    posHighlight: bool(r.posHighlight, DEFAULT_THEME.posHighlight),
+    posNoun: bool(r.posNoun, DEFAULT_THEME.posNoun),
+    posVerb: bool(r.posVerb, DEFAULT_THEME.posVerb),
+    posAdj: bool(r.posAdj, DEFAULT_THEME.posAdj),
+    posAdv: bool(r.posAdv, DEFAULT_THEME.posAdv),
+    posConj: bool(r.posConj, DEFAULT_THEME.posConj),
+    styleCheck: bool(r.styleCheck, DEFAULT_THEME.styleCheck),
+    grammarCheck: bool(r.grammarCheck, DEFAULT_THEME.grammarCheck),
   };
 }

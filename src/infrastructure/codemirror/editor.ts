@@ -1,10 +1,19 @@
 import { Compartment, EditorState, type Text } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import type { ThemeConfig } from "../../domain/entities/theme-config";
+import type { PosLexicon } from "../../domain/services/pos-lexicon";
 import { wordDelta } from "../../domain/services/word-count";
 import { focusMode } from "./focus-mode";
+import {
+  clearGrammarIssues,
+  grammarExtension,
+  setGrammarIssues,
+  type DocGrammarIssue,
+} from "./grammar";
+import { posHighlight } from "./pos-highlight";
 import { buildTheme } from "./ia-writer-theme";
-import { baseExtensions } from "./markdown-setup";
+import { baseExtensions, revisionAttributes } from "./markdown-setup";
+import { styleCheck } from "./style-check";
 import { typewriter } from "./typewriter";
 
 export interface EditorEvents {
@@ -38,8 +47,13 @@ export class CmEditor {
   private readonly themeCompartment = new Compartment();
   private readonly focusCompartment = new Compartment();
   private readonly typewriterCompartment = new Compartment();
+  private readonly revisionCompartment = new Compartment();
+  private readonly styleCompartment = new Compartment();
+  private readonly posCompartment = new Compartment();
+  private readonly grammarCompartment = new Compartment();
   private readonly stateCache = new Map<string, EditorState>();
   private currentPath: string | null = null;
+  private posLexicon: PosLexicon | null = null;
 
   constructor(
     parent: HTMLElement,
@@ -67,6 +81,12 @@ export class CmEditor {
         this.themeCompartment.of(buildTheme(this.config)),
         this.focusCompartment.of(focusMode(this.config.focusMode)),
         this.typewriterCompartment.of(this.config.typewriter ? typewriter() : []),
+        this.revisionCompartment.of(
+          revisionAttributes(this.config.spellcheck, this.config.autocorrect),
+        ),
+        this.styleCompartment.of(this.config.styleCheck ? styleCheck() : []),
+        this.posCompartment.of(this.posExtension(this.config)),
+        this.grammarCompartment.of(this.config.grammarCheck ? grammarExtension() : []),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
           let delta = 0;
@@ -105,6 +125,13 @@ export class CmEditor {
     this.stateCache.delete(path);
   }
 
+  /** Descarta o cache de tudo sob um prefixo (pasta movida/renomeada/excluída). */
+  forgetUnder(prefix: string): void {
+    for (const key of [...this.stateCache.keys()]) {
+      if (key === prefix || key.startsWith(`${prefix}/`)) this.stateCache.delete(key);
+    }
+  }
+
   currentText(): string {
     return this.view.state.doc.toString();
   }
@@ -116,12 +143,61 @@ export class CmEditor {
         this.themeCompartment.reconfigure(buildTheme(config)),
         this.focusCompartment.reconfigure(focusMode(config.focusMode)),
         this.typewriterCompartment.reconfigure(config.typewriter ? typewriter() : []),
+        this.revisionCompartment.reconfigure(
+          revisionAttributes(config.spellcheck, config.autocorrect),
+        ),
+        this.styleCompartment.reconfigure(config.styleCheck ? styleCheck() : []),
+        this.posCompartment.reconfigure(this.posExtension(config)),
+        this.grammarCompartment.reconfigure(config.grammarCheck ? grammarExtension() : []),
       ],
+    });
+  }
+
+  private posExtension(config: ThemeConfig) {
+    return config.posHighlight && this.posLexicon
+      ? posHighlight(this.posLexicon, config)
+      : [];
+  }
+
+  /** injeta o léxico carregado (lazy) e ativa o realce se configurado */
+  setPosLexicon(lexicon: PosLexicon): void {
+    this.posLexicon = lexicon;
+    this.view.dispatch({
+      effects: this.posCompartment.reconfigure(this.posExtension(this.config)),
     });
   }
 
   focus(): void {
     this.view.focus();
+  }
+
+  // ── gramática (LanguageTool) ──────────────────────────────────────
+
+  /** janela de texto para checagem: doc inteiro se couber no limite da API */
+  visibleWindow(): { from: number; to: number; text: string } {
+    const doc = this.view.state.doc;
+    if (doc.length <= 19_000) {
+      return { from: 0, to: doc.length, text: doc.toString() };
+    }
+    const ranges = this.view.visibleRanges;
+    const start = ranges.length ? ranges[0]!.from : 0;
+    const end = ranges.length ? ranges[ranges.length - 1]!.to : 0;
+    const from = doc.lineAt(start).from;
+    const to = doc.lineAt(Math.min(end, from + 19_000)).to;
+    return { from, to, text: doc.sliceString(from, to) };
+  }
+
+  /** identidade do documento — comparar antes/depois de uma checagem async */
+  docIdentity(): unknown {
+    return this.view.state.doc;
+  }
+
+  setGrammarIssues(issues: DocGrammarIssue[]): void {
+    this.view.dispatch({ effects: setGrammarIssues.of(issues) });
+  }
+
+  clearGrammarIssues(): void {
+    this.view.dispatch({ effects: clearGrammarIssues.of(null) });
   }
 
   destroy(): void {

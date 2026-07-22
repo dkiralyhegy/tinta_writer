@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatReadingTime } from "../domain/services/reading-time";
   import type { Workspace } from "./stores/workspace.svelte";
 
   let { workspace }: { workspace: Workspace } = $props();
@@ -28,6 +29,7 @@
   <div class="cell left">
     <span>{workspace.wordsTotal} palavras</span>
     <span class="dim">{workspace.charsTotal} caracteres</span>
+    <span class="dim">{formatReadingTime(workspace.wordsTotal)}</span>
   </div>
 
   <div class="cell center">
@@ -48,7 +50,7 @@
       ⌘
       <div class="pop" role="tooltip">
         <p class="pop-title">atalhos</p>
-        {#each [["⌘S", "salvar agora"], ["⌘J", "nota de hoje"], ["⌘F", "buscar no texto"], ["⌘D", "modo foco (ciclar)"], ["⌘T", "typewriter"], ["⌘\\", "sidebar"], ["⌘⇧F", "modo zen — esc sai"], ["⌘,", "ajustes"]] as [k, label] (k)}
+        {#each [["⌘S", "salvar agora"], ["⌘J", "nota de hoje"], ["⌘F", "buscar no texto"], ["⌘D", "modo foco (ciclar)"], ["⌘T", "typewriter"], ["⌘⇧S", "realce de sintaxe"], ["⌘\\", "sidebar"], ["⌘⇧F", "modo zen — esc sai"], ["⌘,", "ajustes"]] as [k, label] (k)}
           <div class="row"><span class="key">{k}</span><span class="what">{label}</span></div>
         {/each}
       </div>

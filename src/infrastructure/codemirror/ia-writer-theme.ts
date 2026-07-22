@@ -38,6 +38,8 @@ function fontStack(font: EditorFont): string {
       return "'Calling Code', 'Sometype Mono', ui-monospace, monospace";
     case "iA Writer Duo":
       return "'iA Writer Duo', 'Calling Code', ui-monospace, monospace";
+    case "EB Garamond":
+      return "'EB Garamond', 'Iowan Old Style', Georgia, serif";
     case "Neue Haas Grotesk Display":
       return "'Neue Haas Grotesk Display', 'Helvetica Neue', sans-serif";
   }

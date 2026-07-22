@@ -63,6 +63,36 @@
   src: url("../../assets/fonts/CallingCode-Bold.ttf") format("truetype");
 }
 
+/* EB Garamond (SIL OFL) — serifada de livro, linhagem Garamond/Sabon */
+@font-face {
+  font-family: "EB Garamond";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("../../assets/fonts/EBGaramond-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("../../assets/fonts/EBGaramond-Italic.ttf") format("truetype");
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("../../assets/fonts/EBGaramond-Bold.ttf") format("truetype");
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("../../assets/fonts/EBGaramond-BoldItalic.ttf") format("truetype");
+}
+
 @font-face {
   font-family: "iA Writer Duo";
   font-weight: 400;

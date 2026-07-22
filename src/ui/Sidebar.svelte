@@ -6,6 +6,7 @@
 
   let creating = $state<"note" | "folder" | null>(null);
   let createValue = $state("");
+  let dropRoot = $state(false);
 
   function startCreate(kind: "note" | "folder") {
     creating = kind;
@@ -49,7 +50,34 @@
     />
   {/if}
 
-  <nav class="tree">
+  <!-- soltar na área vazia da árvore move a nota para a raiz -->
+  <nav
+    class="tree"
+    class:drop-root={dropRoot}
+    ondragover={(e) => {
+      const types = e.dataTransfer?.types;
+      if (
+        workspace.library &&
+        types &&
+        (types.includes("application/x-tinta-note") ||
+          types.includes("application/x-tinta-folder"))
+      ) {
+        e.preventDefault();
+        dropRoot = true;
+      }
+    }}
+    ondragleave={() => (dropRoot = false)}
+    ondrop={(e) => {
+      dropRoot = false;
+      const src =
+        e.dataTransfer?.getData("application/x-tinta-note") ||
+        e.dataTransfer?.getData("application/x-tinta-folder");
+      if (src && workspace.library) {
+        e.preventDefault();
+        workspace.requestMove(src, workspace.library.rootPath);
+      }
+    }}
+  >
     {#if workspace.library}
       {#each workspace.library.root.children as child (child.path)}
         <TreeNode node={child} {workspace} />
@@ -124,6 +152,10 @@
     flex: 1;
     overflow-y: auto;
     padding-bottom: var(--ab-space-4);
+  }
+
+  .tree.drop-root {
+    box-shadow: inset 0 0 0 1px var(--ab-rule-soft);
   }
 
   .hint {

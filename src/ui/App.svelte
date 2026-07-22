@@ -20,6 +20,9 @@
     if (key === "f" && e.shiftKey) {
       e.preventDefault();
       workspace.toggleZen();
+    } else if (key === "s" && e.shiftKey) {
+      e.preventDefault();
+      void workspace.togglePosHighlight();
     } else if (key === ",") {
       e.preventDefault();
       workspace.settingsOpen = !workspace.settingsOpen;
@@ -91,6 +94,13 @@
         <div class="conflict-banner">
           <span>{workspace.conflictNotice}</span>
           <button onclick={() => (workspace.conflictNotice = null)}>fechar</button>
+        </div>
+      {/if}
+      {#if workspace.pendingMove}
+        <div class="conflict-banner">
+          <span>mover "{workspace.pendingMove.noteName}" para {workspace.pendingMove.destName}?</span>
+          <button onclick={() => void workspace.confirmMove()}>mover</button>
+          <button onclick={() => workspace.cancelMove()}>cancelar</button>
         </div>
       {/if}
     </main>

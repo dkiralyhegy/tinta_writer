@@ -144,6 +144,127 @@
     </section>
 
     <section>
+      <p class="eyebrow label">sintaxe — classes gramaticais — ⌘⇧S</p>
+      <div class="segmented">
+        <button
+          class:on={!theme.posHighlight}
+          onclick={() => theme.posHighlight && void workspace.togglePosHighlight()}
+        >
+          off
+        </button>
+        <button
+          class:on={theme.posHighlight}
+          onclick={() => !theme.posHighlight && void workspace.togglePosHighlight()}
+        >
+          on
+        </button>
+      </div>
+      {#if theme.posHighlight}
+        <div class="pos-chips">
+          <button
+            class="chip"
+            class:chip-on={theme.posNoun}
+            style:--chip-color="var(--tinta-pos-noun)"
+            onclick={() => workspace.updateTheme({ posNoun: !theme.posNoun })}
+          >
+            substantivos
+          </button>
+          <button
+            class="chip"
+            class:chip-on={theme.posVerb}
+            style:--chip-color="var(--tinta-pos-verb)"
+            onclick={() => workspace.updateTheme({ posVerb: !theme.posVerb })}
+          >
+            verbos
+          </button>
+          <button
+            class="chip"
+            class:chip-on={theme.posAdj}
+            style:--chip-color="var(--tinta-pos-adj)"
+            onclick={() => workspace.updateTheme({ posAdj: !theme.posAdj })}
+          >
+            adjetivos
+          </button>
+          <button
+            class="chip"
+            class:chip-on={theme.posAdv}
+            style:--chip-color="var(--tinta-pos-adv)"
+            onclick={() => workspace.updateTheme({ posAdv: !theme.posAdv })}
+          >
+            advérbios
+          </button>
+          <button
+            class="chip"
+            class:chip-on={theme.posConj}
+            style:--chip-color="var(--tinta-pos-conj)"
+            onclick={() => workspace.updateTheme({ posConj: !theme.posConj })}
+          >
+            conjunções
+          </button>
+        </div>
+        <p class="note">dica: ligue só advérbios para caçar excessos</p>
+      {/if}
+    </section>
+
+    <section>
+      <p class="eyebrow label">estilo — riscar vícios</p>
+      <div class="segmented">
+        <button class:on={!theme.styleCheck} onclick={() => workspace.updateTheme({ styleCheck: false })}>
+          off
+        </button>
+        <button class:on={theme.styleCheck} onclick={() => workspace.updateTheme({ styleCheck: true })}>
+          on
+        </button>
+      </div>
+      <p class="note">risca muletas, redundâncias e clichês — só no editor, o arquivo não muda</p>
+    </section>
+
+    <section>
+      <p class="eyebrow label">ortografia (macos)</p>
+      <div class="segmented">
+        <button class:on={!theme.spellcheck} onclick={() => workspace.updateTheme({ spellcheck: false })}>
+          off
+        </button>
+        <button class:on={theme.spellcheck} onclick={() => workspace.updateTheme({ spellcheck: true })}>
+          on
+        </button>
+      </div>
+    </section>
+
+    <section>
+      <p class="eyebrow label">autocorreção (macos)</p>
+      <div class="segmented">
+        <button class:on={!theme.autocorrect} onclick={() => workspace.updateTheme({ autocorrect: false })}>
+          off
+        </button>
+        <button class:on={theme.autocorrect} onclick={() => workspace.updateTheme({ autocorrect: true })}>
+          on
+        </button>
+      </div>
+    </section>
+
+    <section>
+      <p class="eyebrow label">gramática (languagetool)</p>
+      <div class="segmented">
+        <button class:on={!theme.grammarCheck} onclick={() => theme.grammarCheck && workspace.toggleGrammarCheck()}>
+          off
+        </button>
+        <button class:on={theme.grammarCheck} onclick={() => !theme.grammarCheck && workspace.toggleGrammarCheck()}>
+          on
+        </button>
+      </div>
+      {#if theme.grammarCheck}
+        <p class="note warn">
+          ligado: o texto é enviado para api.languagetool.org (online).
+          com um servidor LanguageTool local em 127.0.0.1:8081, o tinta
+          o usa automaticamente e nada sai da máquina.
+        </p>
+      {:else}
+        <p class="note">concordância, crase, regência — sublinha e sugere correções</p>
+      {/if}
+    </section>
+
+    <section>
       <p class="eyebrow label">meta diária de palavras</p>
       <input
         class="goal-input"
@@ -284,6 +405,28 @@
     width: 100%;
   }
 
+  .pos-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ab-space-1);
+    margin-top: var(--ab-space-2);
+  }
+
+  .chip {
+    font-size: var(--ab-size-eyebrow);
+    letter-spacing: var(--ab-tracking-wide);
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border: 1px solid var(--ab-rule-soft);
+    color: var(--ab-fg-muted);
+  }
+
+  .chip-on {
+    color: var(--chip-color);
+    border-color: var(--chip-color);
+    box-shadow: inset 0 -2px 0 var(--chip-color);
+  }
+
   .path {
     font-size: var(--ab-size-eyebrow);
     color: var(--ab-fg-muted);
@@ -308,6 +451,10 @@
     font-size: var(--ab-size-eyebrow);
     color: var(--ab-fg-muted);
     line-height: var(--ab-leading-body);
+  }
+
+  .note.warn {
+    color: var(--tinta-accent);
   }
 
   .mono {

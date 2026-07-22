@@ -3,9 +3,29 @@ mod watcher;
 
 use commands::{library, notes, snapshots, storage};
 
+/// O WKWebView só sublinha erros de ortografia se a preferência nativa
+/// "verificar ortografia durante a digitação" estiver ligada — e em apps
+/// Tauri ela nasce desligada. Ligamos aqui (nível WebKit); o toggle nos
+/// ajustes do tinta continua mandando, via atributo spellcheck do editor.
+#[cfg(target_os = "macos")]
+fn enable_native_spellcheck() {
+    use objc2_foundation::{NSString, NSUserDefaults};
+    let defaults = NSUserDefaults::standardUserDefaults();
+    defaults.setBool_forKey(true, &NSString::from_str("WebContinuousSpellCheckingEnabled"));
+    defaults.setBool_forKey(
+        true,
+        &NSString::from_str("WebAutomaticSpellingCorrectionEnabled"),
+    );
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|_app| {
+            #[cfg(target_os = "macos")]
+            enable_native_spellcheck();
+            Ok(())
+        })
         .plugin(tauri_plugin_dialog::init())
         .manage(watcher::SelfWrites::default())
         .manage(watcher::WatcherState::default())

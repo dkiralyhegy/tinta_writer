@@ -23,6 +23,9 @@ import { pruneSnapshots } from "../../application/use-cases/prune-snapshots";
 import { saveNote } from "../../application/use-cases/save-note";
 import type { ProgressTracker } from "../../application/use-cases/track-progress";
 import type { CmEditor } from "../../infrastructure/codemirror/editor";
+import { GrammarSession } from "../../infrastructure/languagetool/grammar-session";
+import { LanguageToolChecker } from "../../infrastructure/languagetool/lt-checker";
+import { loadPosLexicon } from "../../infrastructure/pos/lexicon-loader";
 import { GUIDE_PATH, GUIDE_TEXT, GUIDE_TITLE } from "../content/guide";
 
 export type SaveState = "idle" | "pending" | "saved" | "error" | "conflict";
@@ -51,6 +54,13 @@ export class Workspace {
   zenMode = $state(false);
   /** aviso efêmero de troca de modo (⌘D/⌘T/⌘⇧F) — id força reanimação */
   hud = $state<{ label: string; id: number } | null>(null);
+  /** movimentação por drag & drop aguardando confirmação do usuário */
+  pendingMove = $state<{
+    srcPath: string;
+    destDir: string;
+    noteName: string;
+    destName: string;
+  } | null>(null);
   saveState = $state<SaveState>("idle");
   conflictNotice = $state<string | null>(null);
   wordsTotal = $state(0);
@@ -83,6 +93,9 @@ export class Workspace {
 
     await this.deps.tracker.init();
     this.wordsToday = this.deps.tracker.wordsToday();
+
+    // realce de sintaxe persistido ligado → carrega o léxico em background
+    if (this.theme.posHighlight) void this.ensureLexicon();
 
     const rootPath = raw?.rootPath ?? null;
     if (rootPath) {
@@ -121,7 +134,9 @@ export class Workspace {
 
   attachEditor(editor: CmEditor): void {
     this.editor = editor;
+    if (this.lexicon) editor.setPosLexicon(this.lexicon);
     if (this.note) editor.openDocument(this.note.path, this.note.content);
+    this.syncGrammarSession();
   }
 
   /** flush duplo em blur/quit: nota + estatísticas */
@@ -164,6 +179,7 @@ export class Workspace {
     this.editor?.openDocument(note.path, note.content);
     this.recount(note.content);
     this.persistSettings();
+    this.grammarSession?.checkSoon();
   }
 
   async openToday(): Promise<void> {
@@ -203,10 +219,83 @@ export class Workspace {
     await this.refreshLibrary();
   }
 
+  /** pedido de mover nota ou pasta (drag & drop) — confirma antes de agir */
+  requestMove(srcPath: string, destDir: string): void {
+    const currentDir = srcPath.slice(0, srcPath.lastIndexOf("/"));
+    if (currentDir === destDir || srcPath === destDir) return;
+    if (destDir.startsWith(`${srcPath}/`)) {
+      this.showHud("não dá para mover uma pasta para dentro dela mesma");
+      return;
+    }
+    const noteName = srcPath.split("/").pop() ?? srcPath;
+    const destName =
+      destDir === this.library?.rootPath
+        ? "a raiz da biblioteca"
+        : `"${destDir.split("/").pop() ?? destDir}"`;
+    this.pendingMove = { srcPath, destDir, noteName, destName };
+  }
+
+  async confirmMove(): Promise<void> {
+    const move = this.pendingMove;
+    this.pendingMove = null;
+    if (!move) return;
+    const to = `${move.destDir}/${move.noteName}`;
+    try {
+      await this.autosave.flushNow().catch(() => {});
+      await this.deps.repo.rename(move.srcPath, to);
+      this.editor?.forgetUnder(move.srcPath);
+      const reopen = this.translatedNotePath(move.srcPath, to);
+      await this.refreshLibrary();
+      if (reopen) await this.openPath(reopen);
+      this.showHud(`movido para ${move.destName}`);
+    } catch {
+      this.showHud("não foi possível mover — nome já existe no destino?");
+      await this.refreshLibrary();
+    }
+  }
+
+  /** caminho novo da nota aberta quando ela (ou a pasta dela) se move */
+  private translatedNotePath(from: string, to: string): string | null {
+    const current = this.note?.path;
+    if (!current) return null;
+    if (current === from) return to;
+    if (current.startsWith(`${from}/`)) return to + current.slice(from.length);
+    return null;
+  }
+
+  cancelMove(): void {
+    this.pendingMove = null;
+  }
+
   async deleteNote(path: string): Promise<void> {
     await this.deps.repo.delete(path);
     this.editor?.forget(path);
     if (this.note?.path === path) {
+      this.note = null;
+      this.saveState = "idle";
+    }
+    await this.refreshLibrary();
+  }
+
+  async renameFolder(path: string, newName: string): Promise<void> {
+    const clean = newName.trim();
+    if (!clean) return;
+    const parent = path.slice(0, path.lastIndexOf("/"));
+    const to = `${parent}/${clean}`;
+    if (to === path) return;
+    await this.autosave.flushNow().catch(() => {});
+    await this.deps.repo.rename(path, to);
+    this.editor?.forgetUnder(path);
+    const reopen = this.translatedNotePath(path, to);
+    await this.refreshLibrary();
+    if (reopen) await this.openPath(reopen);
+  }
+
+  /** exclui a pasta inteira — vai para a Lixeira do macOS, recuperável */
+  async deleteFolder(path: string): Promise<void> {
+    await this.deps.repo.delete(path);
+    this.editor?.forgetUnder(path);
+    if (this.note && (this.note.path === path || this.note.path.startsWith(`${path}/`))) {
       this.note = null;
       this.saveState = "idle";
     }
@@ -237,6 +326,7 @@ export class Workspace {
     this.saveState = "pending";
     this.autosave.markDirty();
     this.scheduleRecount(getText);
+    this.grammarSession?.noteChanged();
   }
 
   async saveNow(): Promise<void> {
@@ -344,6 +434,51 @@ export class Workspace {
     this.zenMode = !this.zenMode;
     this.editor?.focus();
     this.showHud(this.zenMode ? "zen: ligado — esc sai" : "zen: desligado");
+  }
+
+  /** liga/desliga o realce de classes gramaticais; carrega o léxico na primeira vez */
+  async togglePosHighlight(): Promise<void> {
+    const turningOn = !this.theme.posHighlight;
+    if (turningOn) {
+      const ok = await this.ensureLexicon();
+      if (!ok) return;
+    }
+    this.updateTheme({ posHighlight: turningOn });
+    this.showHud(turningOn ? "sintaxe: ligada" : "sintaxe: desligada");
+  }
+
+  private lexicon: Awaited<ReturnType<typeof loadPosLexicon>> | null = null;
+  private grammarSession: GrammarSession | null = null;
+
+  /** liga/desliga a gramática LanguageTool (online, opt-in) */
+  toggleGrammarCheck(): void {
+    const turningOn = !this.theme.grammarCheck;
+    this.updateTheme({ grammarCheck: turningOn });
+    this.syncGrammarSession();
+    this.showHud(turningOn ? "gramática: ligada (online)" : "gramática: desligada");
+  }
+
+  private syncGrammarSession(): void {
+    if (this.theme.grammarCheck && this.editor && !this.grammarSession) {
+      this.grammarSession = new GrammarSession(this.editor, new LanguageToolChecker());
+      this.grammarSession.checkSoon();
+    } else if (!this.theme.grammarCheck && this.grammarSession) {
+      this.grammarSession.dispose();
+      this.grammarSession = null;
+    }
+  }
+
+  private async ensureLexicon(): Promise<boolean> {
+    if (this.lexicon) return true;
+    this.showHud("carregando léxico…");
+    try {
+      this.lexicon = await loadPosLexicon();
+      this.editor?.setPosLexicon(this.lexicon);
+      return true;
+    } catch {
+      this.showHud("erro ao carregar o léxico");
+      return false;
+    }
   }
 
   /** mostra um aviso efêmero no canto; some sozinho */

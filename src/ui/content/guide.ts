@@ -76,10 +76,31 @@ quando precisar de referências.
 Abra os ajustes com **⌘,** (ou pelo rodapé da sidebar). Lá você escolhe:
 
 - claro, escuro ou seguir o sistema
-- a fonte do editor — *Calling Code*, *iA Writer Duo* ou *Neue Haas*
+- a fonte do editor — *Calling Code* e *iA Writer Duo* (monoespaçadas),
+  *EB Garamond* (serifada de livro) ou *Neue Haas* (sem serifa)
 - corpo do texto, entrelinha e largura da coluna
 - alinhamento à esquerda ou justificado (com hifenização em português)
 - a cor de acento — do cursor, das marcações, da barra de meta
+
+## revisar e polir
+
+Escrever é uma coisa; revisar é outra. Para a segunda, o tinta tem:
+
+- **⌘⇧S — realce de sintaxe.** Colore as classes gramaticais:
+  substantivos, verbos, adjetivos, advérbios e conjunções, cada uma na
+  sua cor. Excesso de advérbios e adjetivos salta aos olhos. Nos
+  ajustes dá para filtrar — ligar só advérbios é o modo clássico de
+  caçar exageros. Tudo local: o léxico (228 mil formas do português)
+  vive dentro do app.
+- **Riscar vícios.** Liga nos ajustes: muletas ("basicamente", "na
+  verdade"), redundâncias ("subir para cima") e clichês ("a cereja do
+  bolo") aparecem riscados — só no editor, o arquivo não muda.
+- **Ortografia e autocorreção** são as nativas do macOS, em português,
+  e podem ser desligadas nos ajustes.
+- **Gramática (opcional).** O LanguageTool sublinha concordância, crase
+  e regência, com sugestões clicáveis. Desligado por padrão: quando
+  ligado, o texto é enviado ao serviço online — o aviso fica visível
+  nos ajustes, e um servidor local é usado se existir.
 
 ## metas e estatísticas
 

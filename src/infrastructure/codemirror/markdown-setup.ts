@@ -19,11 +19,19 @@ export function baseExtensions(): Extension {
     markdown({ base: markdownLanguage }),
     highlightSelectionMatches(),
     keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
-    EditorView.contentAttributes.of({
-      spellcheck: "true",
-      autocorrect: "on",
-      autocapitalize: "on",
-      lang: "pt-BR",
-    }),
   ];
+}
+
+/**
+ * Atributos de revisão nativa (macOS): ortografia e autocorreção.
+ * Vive num Compartment próprio — os toggles dos ajustes reconfiguram
+ * sem recriar o editor.
+ */
+export function revisionAttributes(spellcheck: boolean, autocorrect: boolean): Extension {
+  return EditorView.contentAttributes.of({
+    spellcheck: spellcheck ? "true" : "false",
+    autocorrect: autocorrect ? "on" : "off",
+    autocapitalize: autocorrect ? "on" : "off",
+    lang: "pt-BR",
+  });
 }

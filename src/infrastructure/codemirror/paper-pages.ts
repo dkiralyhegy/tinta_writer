@@ -224,7 +224,8 @@ const sheetsLayer = layer({
   above: false,
   class: "tinta-paper-layer",
   markers(view) {
-    const l = view.state.field(layoutField);
+    const l = view.state.field(layoutField, false);
+    if (!l) return [];
     return l.sheets.map(
       (s, i) =>
         new SheetMarker(l.sheetLeft, s.top, l.sheetWidth, s.height, i + 1),
@@ -232,16 +233,16 @@ const sheetsLayer = layer({
   },
   update(update) {
     return (
-      update.startState.field(layoutField) !== update.state.field(layoutField)
+      update.startState.field(layoutField, false) !==
+      update.state.field(layoutField, false)
     );
   },
 });
 
 function pageOf(state: EditorState, pos: number): number {
   const line = state.doc.lineAt(pos).number;
-  return (
-    1 + state.field(layoutField).breakLines.filter((n) => n <= line).length
-  );
+  const breaks = state.field(layoutField, false)?.breakLines ?? [];
+  return 1 + breaks.filter((n) => n <= line).length;
 }
 
 /**
@@ -275,9 +276,12 @@ export function paperPages(onPageInfo: (info: PageInfo) => void): Extension {
       schedule(view: EditorView) {
         view.requestMeasure({
           key: this,
-          read: (v) => measureLayout(v),
+          read: (v) => (this.destroyed ? null : measureLayout(v)),
           write: (layout, v) => {
-            if (sameLayout(layout, v.state.field(layoutField))) return;
+            if (this.destroyed || !layout) return;
+            // o field pode já ter saído da config (estado restaurado em outro estilo)
+            const current = v.state.field(layoutField, false);
+            if (!current || sameLayout(layout, current)) return;
             queueMicrotask(() => {
               if (!this.destroyed)
                 v.dispatch({ effects: setLayout.of(layout) });
@@ -288,7 +292,7 @@ export function paperPages(onPageInfo: (info: PageInfo) => void): Extension {
       report(view: EditorView) {
         const info = {
           page: pageOf(view.state, view.state.selection.main.head),
-          total: view.state.field(layoutField).sheets.length || 1,
+          total: view.state.field(layoutField, false)?.sheets.length || 1,
         };
         const key = `${info.page}/${info.total}`;
         if (key === this.lastInfo) return;

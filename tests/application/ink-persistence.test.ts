@@ -93,5 +93,12 @@ describe("princípio: a nota nunca recebe cor", () => {
 
     expect((await repo.read(NOTE)).content).toBe(text);
     expect(store.files.get(NOTE)).toContain('"ink":"blue"');
+
+    const noteContent = (await repo.read(NOTE)).content;
+    expect(noteContent).not.toContain('"ink"');
+    expect(noteContent).not.toContain("<span");
+    expect(noteContent).not.toContain("{");
+    // o único artefato com "ink" é o lateral
+    expect([...store.files.keys()]).toEqual([NOTE]);
   });
 });

@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use super::atomic_write;
 
@@ -13,6 +13,11 @@ fn rel_in_ink(root: &str, path: &str) -> Result<PathBuf, String> {
     let rel = Path::new(path)
         .strip_prefix(rootp)
         .map_err(|_| format!("fora da biblioteca: {path}"))?;
+    // contenção: nada de `..`, raiz vazia ou componentes especiais
+    if rel.as_os_str().is_empty() || !rel.components().all(|c| matches!(c, Component::Normal(_)))
+    {
+        return Err(format!("caminho inválido: {path}"));
+    }
     Ok(rootp.join(INK_DIR).join(rel))
 }
 
@@ -102,5 +107,73 @@ mod tests {
     #[test]
     fn nota_fora_da_biblioteca_e_erro() {
         assert!(ink_file("/lib", "/outro/cap.md").is_err());
+    }
+
+    #[test]
+    fn ponto_ponto_e_erro() {
+        assert!(ink_file("/lib", "/lib/../notes/a.md").is_err());
+        assert!(rel_in_ink("/lib", "/lib/..").is_err());
+        assert!(rel_in_ink("/lib", "/lib/a/../../x").is_err());
+    }
+
+    #[test]
+    fn raiz_da_biblioteca_e_erro() {
+        assert!(rel_in_ink("/lib", "/lib").is_err());
+        assert!(ink_file("/lib", "/lib").is_err());
+    }
+
+    #[test]
+    fn caminho_aninhado_normal_continua_valido() {
+        assert_eq!(
+            rel_in_ink("/lib", "/lib/a/b").unwrap(),
+            PathBuf::from("/lib/.ink/a/b")
+        );
+    }
+
+    fn tmp_lib(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("tinta-ink-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn write_ink_cria_e_apaga() {
+        let lib = tmp_lib("write");
+        let root = lib.to_string_lossy().to_string();
+        let note = lib.join("sub/n.md").to_string_lossy().to_string();
+        write_ink(root.clone(), note.clone(), Some("{}".into())).unwrap();
+        let f = lib.join(".ink/sub/n.md.json");
+        assert_eq!(fs::read_to_string(&f).unwrap(), "{}");
+        assert_eq!(read_ink(root.clone(), note.clone()).unwrap(), Some("{}".into()));
+        write_ink(root.clone(), note.clone(), None).unwrap();
+        assert!(!f.exists());
+        write_ink(root, note, None).unwrap();
+        let _ = fs::remove_dir_all(&lib);
+    }
+
+    #[test]
+    fn move_ink_acompanha_o_rename_da_nota() {
+        let lib = tmp_lib("move");
+        let root = lib.to_string_lossy().to_string();
+        let from = lib.join("a.md").to_string_lossy().to_string();
+        let to = lib.join("b.md").to_string_lossy().to_string();
+        write_ink(root.clone(), from.clone(), Some("x".into())).unwrap();
+        fs::write(&to, "nota").unwrap();
+        move_ink(root.clone(), from, to).unwrap();
+        assert!(!lib.join(".ink/a.md.json").exists());
+        assert_eq!(fs::read_to_string(lib.join(".ink/b.md.json")).unwrap(), "x");
+        let _ = fs::remove_dir_all(&lib);
+    }
+
+    #[test]
+    fn move_ink_sem_origem_e_ok() {
+        let lib = tmp_lib("move-missing");
+        let root = lib.to_string_lossy().to_string();
+        let from = lib.join("a.md").to_string_lossy().to_string();
+        let to = lib.join("b.md").to_string_lossy().to_string();
+        fs::write(&to, "nota").unwrap();
+        move_ink(root, from, to).unwrap();
+        let _ = fs::remove_dir_all(&lib);
     }
 }

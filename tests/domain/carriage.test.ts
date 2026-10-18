@@ -64,6 +64,24 @@ describe("carriageEvents", () => {
     ).toEqual({ events: [], bellRung: true });
   });
 
+  it("backspace atravessando linha rearma o sino", () => {
+    expect(
+      carriageEvents({ action: "delete", text: "", prev: at(28, 0), next: at(0, 30), bellRung: true }),
+    ).toEqual({ events: ["backspace"], bellRung: false });
+  });
+
+  it("colar texto com quebra de linha = retorno + avanço", () => {
+    const { events } = carriageEvents({
+      action: "insert",
+      text: "ab\ncd",
+      prev: at(0, 3),
+      next: at(28, 2),
+      bellRung: false,
+    });
+    expect(events).toContain("return");
+    expect(events).toContain("linefeed");
+  });
+
   it("colar várias letras = uma tecla", () => {
     expect(
       carriageEvents({ action: "insert", text: "abc", prev: at(0, 1), next: at(0, 4), bellRung: false })

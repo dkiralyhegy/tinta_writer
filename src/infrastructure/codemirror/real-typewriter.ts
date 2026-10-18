@@ -41,6 +41,7 @@ function carriagePlugin(hooks: TypewriterHooks) {
     class {
       private prev: CaretSnapshot | null = null;
       private bellRung = false;
+      private dead = false;
       private pending: { action: CarriageAction | null; text: string } = { action: null, text: "" };
 
       constructor(readonly view: EditorView) {
@@ -60,13 +61,14 @@ function carriagePlugin(hooks: TypewriterHooks) {
             this.pending.action = "move";
           }
         }
-        if (u.docChanged || u.selectionSet || u.geometryChanged) this.schedule();
+        if (u.docChanged || u.selectionSet || u.geometryChanged || this.pending.action) this.schedule();
       }
 
       private schedule() {
         this.view.requestMeasure({
           key: this,
           read: (v): CaretMeasure | null => {
+            if (this.dead) return null;
             const head = v.state.selection.main.head;
             const coords = v.coordsAtPos(head);
             if (!coords) return null;
@@ -84,6 +86,7 @@ function carriagePlugin(hooks: TypewriterHooks) {
             };
           },
           write: (m, v) => {
+            if (this.dead) return;
             const { action, text } = this.pending;
             this.pending = { action: null, text: "" };
             if (!m) return;
@@ -115,6 +118,7 @@ function carriagePlugin(hooks: TypewriterHooks) {
       }
 
       destroy() {
+        this.dead = true;
         this.view.scrollDOM.style.transform = "";
         this.view.scrollDOM.style.transition = "";
       }

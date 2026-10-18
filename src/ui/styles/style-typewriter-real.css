@@ -25,7 +25,7 @@
 .tinta-tw-real.cm-editor {
   background: var(--tinta-paper);
   overflow: hidden;
-  animation: tw-feed 600ms var(--ab-ease) both;
+  animation: tw-feed 600ms var(--ab-ease) backwards;
 }
 
 /* fibra do papel: ruído SVG inline, acompanha a folha (attachment local) */

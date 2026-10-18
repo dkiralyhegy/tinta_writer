@@ -35,6 +35,8 @@ export interface EditorEvents {
   /** folha atual / total no estilo papel; null fora dele */
   onPageInfo?(info: PageInfo | null): void;
   onCarriage?(events: CarriageEvent[]): void;
+  /** as cores mudaram sem o texto mudar (recolorir, ⌘Z/⌘⇧Z de recolorir) */
+  onInkChanged?(): void;
 }
 
 /** no typewriter real, foco e typewriter scrolling ficam suspensos (não alterados) */
@@ -126,7 +128,13 @@ export class CmEditor {
         inkField(inkRuns, inkModeOf(this.config)),
         inkDecorations,
         EditorView.updateListener.of((update) => {
-          if (!update.docChanged) return;
+          if (!update.docChanged) {
+            const before = inkRunsOf(update.startState);
+            const after = inkRunsOf(update.state);
+            const same = before === after || (before.length === 0 && after.length === 0);
+            if (!same) this.events.onInkChanged?.();
+            return;
+          }
           let delta = 0;
           update.changes.iterChanges((fromA, toA, fromB, toB) => {
             const oldRange = expandToWordBounds(update.startState.doc, fromA, toA);

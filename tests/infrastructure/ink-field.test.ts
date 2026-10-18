@@ -130,6 +130,23 @@ describe("inkField — desfazer/refazer", () => {
     expect(inkRunsOf(run(undo, s1))).toEqual([]);
   });
 
+  it("desfazer/refazer um recolorir troca a referência dos trechos (base do onInkChanged)", () => {
+    const s0 = EditorState.create({
+      doc: "abcdef",
+      selection: { anchor: 1, head: 4 },
+      extensions: [history(), inkField([], { active: "black", choose: true }), inkHistory],
+    });
+    const s1 = s0.update(recolorSelectionSpec(s0, "blue")!).state;
+    const s2 = run(undo, s1);
+    const s3 = run(redo, s2);
+    expect(inkRunsOf(s2)).not.toBe(inkRunsOf(s1));
+    expect(inkRunsOf(s3)).not.toBe(inkRunsOf(s2));
+    expect(inkRunsOf(s3)).toEqual([blue(1, 4)]);
+    // transação sem relação com as cores mantém a mesma referência
+    const s4 = s3.update({ selection: { anchor: 2 } }).state;
+    expect(inkRunsOf(s4)).toBe(inkRunsOf(s3));
+  });
+
   it("nota sem cor continua sem trechos ao digitar e desfazer", () => {
     const s0 = withHistory("abc", [], false);
     const s1 = s0.update({ changes: { from: 3, insert: "d" }, userEvent: "input.type" }).state;

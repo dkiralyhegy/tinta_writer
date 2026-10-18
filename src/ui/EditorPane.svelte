@@ -9,6 +9,7 @@
   onMount(() => {
     const editor = new CmEditor(host, workspace.theme, {
       onDocChanged: (getText, delta) => workspace.onDocChanged(getText, delta),
+      onInkChanged: () => workspace.onInkChanged(),
       onSave: () => void workspace.saveNow(),
       onPageInfo: (info) => workspace.onPageInfo(info),
       onCarriage: (events) => workspace.onCarriage(events),

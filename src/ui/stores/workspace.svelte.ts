@@ -613,11 +613,16 @@ export class Workspace {
 
   chooseInk(ink: Ink): void {
     if (!this.isRealTypewriter) return;
+    // o CmEditor avisa via onInkChanged → markInkDirty
     const recolored = this.editor?.recolorSelection(ink) ?? false;
-    if (recolored) this.markInkDirty();
     this.updateTheme({ ink });
     this.editor?.focus();
     this.showHud(`${recolored ? "trecho" : "tinta"}: ${INK_LABELS[ink]}`);
+  }
+
+  /** chamado pelo CmEditor quando só as cores mudaram (recolorir, desfazer, refazer) */
+  onInkChanged(): void {
+    this.markInkDirty();
   }
 
   /** recolorir não muda o texto, mas o lateral precisa ser gravado */

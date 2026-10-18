@@ -121,3 +121,33 @@
   font-display: swap;
   src: url("../../assets/fonts/iAWriterDuoS-BoldItalic.ttf") format("truetype");
 }
+
+/* Courier Prime — SIL OFL; fonte da máquina de escrever (estilo typewriter real) */
+@font-face {
+  font-family: "Courier Prime";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("../../assets/fonts/CourierPrime-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Courier Prime";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("../../assets/fonts/CourierPrime-Bold.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Courier Prime";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("../../assets/fonts/CourierPrime-Italic.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Courier Prime";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("../../assets/fonts/CourierPrime-BoldItalic.ttf") format("truetype");
+}

@@ -6,6 +6,7 @@ import {
   type Text,
 } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
+import type { CarriageEvent } from "../../domain/services/carriage";
 import type { Ink, ThemeConfig } from "../../domain/entities/theme-config";
 import type { InkRun } from "../../domain/services/ink-runs";
 import type { PosLexicon } from "../../domain/services/pos-lexicon";
@@ -24,6 +25,7 @@ import { posHighlight } from "./pos-highlight";
 import { buildTheme } from "./ia-writer-theme";
 import { baseExtensions, revisionAttributes } from "./markdown-setup";
 import { styleCheck } from "./style-check";
+import { realTypewriter } from "./real-typewriter";
 import { typewriter } from "./typewriter";
 
 export interface EditorEvents {
@@ -32,6 +34,14 @@ export interface EditorEvents {
   onSave(): void;
   /** folha atual / total no estilo papel; null fora dele */
   onPageInfo?(info: PageInfo | null): void;
+  onCarriage?(events: CarriageEvent[]): void;
+}
+
+/** no typewriter real, foco e typewriter scrolling ficam suspensos (não alterados) */
+function effectiveConfig(config: ThemeConfig): ThemeConfig {
+  return config.workspaceStyle === "typewriter-real"
+    ? { ...config, focusMode: "off", typewriter: false }
+    : config;
 }
 
 /** só o typewriter real escolhe tinta; nos outros estilos o texto herda a cor */
@@ -104,8 +114,8 @@ export class CmEditor {
           },
         ]),
         this.themeCompartment.of(buildTheme(this.config)),
-        this.focusCompartment.of(focusMode(this.config.focusMode)),
-        this.typewriterCompartment.of(this.config.typewriter ? typewriter() : []),
+        this.focusCompartment.of(focusMode(effectiveConfig(this.config).focusMode)),
+        this.typewriterCompartment.of(effectiveConfig(this.config).typewriter ? typewriter() : []),
         this.revisionCompartment.of(
           revisionAttributes(this.config.spellcheck, this.config.autocorrect),
         ),
@@ -181,8 +191,8 @@ export class CmEditor {
     this.config = config;
     const effects: StateEffect<unknown>[] = [
       this.themeCompartment.reconfigure(buildTheme(config)),
-      this.focusCompartment.reconfigure(focusMode(config.focusMode)),
-      this.typewriterCompartment.reconfigure(config.typewriter ? typewriter() : []),
+      this.focusCompartment.reconfigure(focusMode(effectiveConfig(config).focusMode)),
+      this.typewriterCompartment.reconfigure(effectiveConfig(config).typewriter ? typewriter() : []),
       this.revisionCompartment.reconfigure(
         revisionAttributes(config.spellcheck, config.autocorrect),
       ),
@@ -211,6 +221,8 @@ export class CmEditor {
     switch (config.workspaceStyle) {
       case "paper":
         return paperPages((info) => this.events.onPageInfo?.(info));
+      case "typewriter-real":
+        return realTypewriter({ onEvents: (e) => this.events.onCarriage?.(e) }, config.inkWear);
       default:
         return [];
     }

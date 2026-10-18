@@ -45,11 +45,24 @@ function fontStack(font: EditorFont): string {
   }
 }
 
+/** classes estáveis por token — alvo de CSS dos estilos (ex.: dupla batida no typewriter real) */
+const tokenClasses = HighlightStyle.define([
+  { tag: tags.strong, class: "tok-strong" },
+  { tag: tags.emphasis, class: "tok-em" },
+  {
+    tag: [tags.heading1, tags.heading2, tags.heading3, tags.heading4, tags.heading5, tags.heading6],
+    class: "tok-heading",
+  },
+]);
+
+const TYPEWRITER_FONT = "'Courier Prime', 'Courier New', ui-monospace, monospace";
+
 /**
  * Tema dimensional do editor (fonte, corpo, coluna). Trocado em runtime via
  * Compartment.reconfigure — cores ficam em CSS vars e não passam por aqui.
  */
 export function buildTheme(config: ThemeConfig): Extension {
+  const realTypewriter = config.workspaceStyle === "typewriter-real";
   return [
     EditorView.theme({
       "&": {
@@ -60,11 +73,11 @@ export function buildTheme(config: ThemeConfig): Extension {
       },
       "&.cm-focused": { outline: "none" },
       ".cm-scroller": {
-        fontFamily: fontStack(config.editorFont),
+        fontFamily: realTypewriter ? TYPEWRITER_FONT : fontStack(config.editorFont),
         lineHeight: String(config.lineHeight),
       },
       ".cm-content": {
-        maxWidth: `${config.columnWidth}ch`,
+        maxWidth: realTypewriter ? "65ch" : `${config.columnWidth}ch`,
         margin: "0 auto",
         paddingTop: "var(--tinta-editor-pad-top)",
         paddingBottom: "var(--tinta-editor-pad-bottom)",
@@ -72,9 +85,9 @@ export function buildTheme(config: ThemeConfig): Extension {
         paddingRight: "24px",
         caretColor: "var(--tinta-accent)",
         // justificado pede hifenização, senão a coluna abre "rios" de espaço
-        textAlign: config.justified ? "justify" : "left",
-        hyphens: config.justified ? "auto" : "manual",
-        "-webkit-hyphens": config.justified ? "auto" : "manual",
+        textAlign: config.justified && !realTypewriter ? "justify" : "left",
+        hyphens: config.justified && !realTypewriter ? "auto" : "manual",
+        "-webkit-hyphens": config.justified && !realTypewriter ? "auto" : "manual",
       },
       ".cm-cursor, .cm-dropCursor": {
         borderLeftColor: "var(--tinta-accent)",
@@ -87,5 +100,6 @@ export function buildTheme(config: ThemeConfig): Extension {
       ".cm-selectionMatch": { backgroundColor: "var(--tinta-code-bg)" },
     }),
     syntaxHighlighting(markdownHighlight),
+    syntaxHighlighting(tokenClasses),
   ];
 }

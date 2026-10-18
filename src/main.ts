@@ -12,6 +12,7 @@ import "./ui/styles/tokens.css";
 import "./ui/styles/app.css";
 import "./ui/styles/style-transparent.css";
 import "./ui/styles/style-paper.css";
+import "./ui/styles/style-typewriter-real.css";
 
 import { systemClock } from "./application/ports/clock";
 import { ProgressTracker } from "./application/use-cases/track-progress";

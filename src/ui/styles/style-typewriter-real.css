@@ -1,0 +1,99 @@
+/* ─────────────────────────────────────────────────────────────────
+   estilo máquina de escrever — a tela é a folha; o papel sai de baixo
+   (do teclado) e sobe. Sempre papel claro, independente do tema.
+   ─────────────────────────────────────────────────────────────── */
+
+:root[data-style="typewriter-real"],
+:root[data-style="typewriter-real"][data-theme="dark"] {
+  color-scheme: light;
+  --tinta-paper: #f6f1e7;
+  --tinta-editor-fg: #1d1c1a;
+  --tinta-ink-blue: #1f3a93;
+  --tinta-ink-red: #a3231f;
+  --tinta-dim: rgba(29, 28, 26, 0.45);
+  --tinta-selection: rgba(183, 186, 175, 0.55);
+  --tinta-accent: var(--tinta-editor-fg);
+}
+
+:root[data-style="typewriter-real"][data-ink="blue"] { --tinta-accent: var(--tinta-ink-blue); }
+:root[data-style="typewriter-real"][data-ink="red"] { --tinta-accent: var(--tinta-ink-red); }
+
+:root[data-style="typewriter-real"] body {
+  background: var(--tinta-paper);
+}
+
+.tinta-tw-real.cm-editor {
+  background: var(--tinta-paper);
+  overflow: hidden;
+  animation: tw-feed 600ms var(--ab-ease) both;
+}
+
+/* fibra do papel: ruído SVG inline, acompanha a folha (attachment local) */
+.tinta-tw-real .cm-scroller {
+  background-color: var(--tinta-paper);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.35  0 0 0 0 0.3  0 0 0 0 0.22  0 0 0 0.07 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-attachment: local;
+  scrollbar-width: none;
+}
+
+.tinta-tw-real .cm-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+/* folga para a primeira linha poder ficar na linha de batida (65%) */
+.tinta-tw-real .cm-content {
+  padding-top: 65vh !important;
+  padding-bottom: 35vh !important;
+}
+
+/* o papel curva em volta do rolo logo abaixo da linha de batida */
+.tinta-tw-real.cm-editor::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(65% + 1.9em);
+  bottom: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(60, 45, 25, 0) 0%,
+    rgba(60, 45, 25, 0.08) 35%,
+    rgba(30, 22, 12, 0.22) 100%
+  );
+}
+
+/* uma máquina tem um corpo só */
+.tinta-tw-real .cm-content .tok-heading {
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
+/* negrito = dupla batida; consumido pelo desgaste da tinta (Task 11) */
+.tinta-tw-real .cm-content .tok-strong {
+  font-weight: 400 !important;
+  --tw-bold-shadow: 0.5px 0 0 currentColor;
+  text-shadow: var(--tw-bold-shadow);
+}
+
+/* itálico = sublinhado, como se fazia na máquina */
+.tinta-tw-real .cm-content .tok-em {
+  font-style: normal !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@keyframes tw-feed {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tinta-tw-real.cm-editor {
+    animation: none;
+  }
+}

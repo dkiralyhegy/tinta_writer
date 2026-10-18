@@ -662,6 +662,7 @@ export class Workspace {
     const root = document.documentElement;
     root.dataset.accent = this.theme.accent;
     root.dataset.style = this.theme.workspaceStyle;
+    root.dataset.ink = this.theme.ink;
     const alpha = (n: number) => `${Math.round(Math.min(1, n) * 100)}%`;
     root.style.setProperty("--tinta-window-alpha", alpha(this.theme.windowOpacity));
     root.style.setProperty("--tinta-chrome-alpha", alpha(this.theme.windowOpacity + 0.15));

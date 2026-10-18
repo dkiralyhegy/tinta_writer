@@ -16,6 +16,14 @@ import { goalProgressOf } from "../../domain/services/stats-calculator";
 import { countChars, countWords } from "../../domain/services/word-count";
 import type { WindowAppearance } from "../../application/ports/window-appearance";
 import type { Clock } from "../../application/ports/clock";
+import type { InkStore } from "../../application/ports/ink-store";
+import {
+  FRESH_INK_SESSION,
+  loadInk,
+  saveInk,
+  type InkSession,
+} from "../../application/use-cases/ink-persistence";
+import type { InkRun } from "../../domain/services/ink-runs";
 import type { NoteRepository } from "../../application/ports/note-repository";
 import type { PersistedSettings, SettingsStore } from "../../application/ports/settings-store";
 import { Autosave } from "../../application/use-cases/autosave";
@@ -47,6 +55,7 @@ export interface WorkspaceDeps {
   tracker: ProgressTracker;
   clock: Clock;
   windowAppearance: WindowAppearance;
+  inkStore: InkStore;
   /** abre o dialog nativo de escolher pasta; null se cancelado */
   pickFolder: () => Promise<string | null>;
 }
@@ -90,6 +99,9 @@ export class Workspace {
   private hudTimer: ReturnType<typeof setTimeout> | null = null;
   private hudSeq = 0;
   private systemDark: MediaQueryList | null = null;
+  private inkSession: InkSession = FRESH_INK_SESSION;
+  /** trechos da nota aberta, para o editor que ainda vai montar (attachEditor) */
+  private openInkRuns: InkRun[] = [];
 
   constructor(private readonly deps: WorkspaceDeps) {
     this.autosave = new Autosave(() => this.persistCurrentNote(), 1000);
@@ -138,6 +150,8 @@ export class Workspace {
     this.conflictNotice = null;
     // sem cache: reabrir o guia sempre volta ao texto original
     this.editor?.forget(GUIDE_PATH);
+    this.inkSession = FRESH_INK_SESSION;
+    this.openInkRuns = [];
     this.editor?.openDocument(GUIDE_PATH, GUIDE_TEXT);
     this.recount(GUIDE_TEXT);
   }
@@ -149,7 +163,7 @@ export class Workspace {
   attachEditor(editor: CmEditor): void {
     this.editor = editor;
     if (this.lexicon) editor.setPosLexicon(this.lexicon);
-    if (this.note) editor.openDocument(this.note.path, this.note.content);
+    if (this.note) editor.openDocument(this.note.path, this.note.content, this.openInkRuns);
     this.syncGrammarSession();
   }
 
@@ -190,10 +204,32 @@ export class Workspace {
     this.note = note;
     this.saveState = "idle";
     this.conflictNotice = null;
-    this.editor?.openDocument(note.path, note.content);
+    this.openInkRuns = await this.loadInkFor(note.path, note.content);
+    this.editor?.openDocument(note.path, note.content, this.openInkRuns);
     this.recount(note.content);
     this.persistSettings();
     this.grammarSession?.checkSoon();
+  }
+
+  /** lateral de tinta da nota; falha de leitura = trata como ilegível (não sobrescreve) */
+  private async loadInkFor(path: string, content: string): Promise<InkRun[]> {
+    if (!this.library || this.isGuide(path)) {
+      this.inkSession = FRESH_INK_SESSION;
+      return [];
+    }
+    try {
+      const { runs, session } = await loadInk(this.deps.inkStore, this.library.rootPath, path, content);
+      this.inkSession = session;
+      return runs;
+    } catch {
+      this.inkSession = { lastSaved: null, unreadable: true };
+      return [];
+    }
+  }
+
+  private inkFollow(op: (store: InkStore, root: string) => Promise<void>): Promise<void> {
+    if (!this.library) return Promise.resolve();
+    return op(this.deps.inkStore, this.library.rootPath).catch(() => {});
   }
 
   async openToday(): Promise<void> {
@@ -228,6 +264,7 @@ export class Workspace {
     if (to === path) return;
     await this.autosave.flushNow().catch(() => {});
     await this.deps.repo.rename(path, to);
+    await this.inkFollow((s, r) => s.move(r, path, to));
     this.editor?.forget(path);
     if (this.note?.path === path) await this.openPath(to);
     await this.refreshLibrary();
@@ -257,6 +294,7 @@ export class Workspace {
     try {
       await this.autosave.flushNow().catch(() => {});
       await this.deps.repo.rename(move.srcPath, to);
+      await this.inkFollow((s, r) => s.move(r, move.srcPath, to));
       this.editor?.forgetUnder(move.srcPath);
       const reopen = this.translatedNotePath(move.srcPath, to);
       await this.refreshLibrary();
@@ -283,6 +321,7 @@ export class Workspace {
 
   async deleteNote(path: string): Promise<void> {
     await this.deps.repo.delete(path);
+    await this.inkFollow((s, r) => s.trash(r, path));
     this.editor?.forget(path);
     if (this.note?.path === path) {
       this.note = null;
@@ -299,6 +338,7 @@ export class Workspace {
     if (to === path) return;
     await this.autosave.flushNow().catch(() => {});
     await this.deps.repo.rename(path, to);
+    await this.inkFollow((s, r) => s.move(r, path, to));
     this.editor?.forgetUnder(path);
     const reopen = this.translatedNotePath(path, to);
     await this.refreshLibrary();
@@ -308,6 +348,7 @@ export class Workspace {
   /** exclui a pasta inteira — vai para a Lixeira do macOS, recuperável */
   async deleteFolder(path: string): Promise<void> {
     await this.deps.repo.delete(path);
+    await this.inkFollow((s, r) => s.trash(r, path));
     this.editor?.forgetUnder(path);
     if (this.note && (this.note.path === path || this.note.path.startsWith(`${path}/`))) {
       this.note = null;
@@ -357,7 +398,9 @@ export class Workspace {
     if (!note || !editor || this.isGuide(note.path)) return;
 
     try {
-      const outcome = await saveNote(this.deps.repo, note, editor.currentText());
+      const text = editor.currentText();
+      const runs = editor.currentInkRuns();
+      const outcome = await saveNote(this.deps.repo, note, text);
       if (outcome.conflictPath) {
         // o disco mudou por fora: nossa edição foi preservada no .conflict —
         // seguimos editando NELE; o arquivo original fica com a versão externa
@@ -366,16 +409,38 @@ export class Workspace {
         this.editor?.forget(note.path);
         const conflictNote = await openNote(this.deps.repo, outcome.conflictPath);
         this.note = conflictNote;
-        this.editor?.openDocument(conflictNote.path, conflictNote.content);
+        // as cores acompanham a edição preservada no .conflict
+        this.inkSession = FRESH_INK_SESSION;
+        await this.persistInk(conflictNote.path, text, runs);
+        this.openInkRuns = runs;
+        this.editor?.openDocument(conflictNote.path, conflictNote.content, runs);
         await this.refreshLibrary();
       } else {
         this.note = outcome.note;
+        await this.persistInk(note.path, text, runs);
         if (this.saveState !== "pending" || !this.autosave.isDirty) this.saveState = "saved";
       }
       void this.deps.tracker.flush().catch(() => {});
     } catch (err) {
       this.saveState = "error";
       throw err;
+    }
+  }
+
+  /** a nota já está salva; falha aqui só perde cor, nunca texto */
+  private async persistInk(path: string, text: string, runs: readonly InkRun[]): Promise<void> {
+    if (!this.library) return;
+    try {
+      this.inkSession = await saveInk(
+        this.deps.inkStore,
+        this.library.rootPath,
+        path,
+        text,
+        runs,
+        this.inkSession,
+      );
+    } catch {
+      this.showHud("cores não salvas — nova tentativa no próximo save");
     }
   }
 
@@ -393,7 +458,8 @@ export class Workspace {
       this.editor?.forget(current.path);
       const fresh = await openNote(this.deps.repo, current.path);
       this.note = fresh;
-      this.editor?.openDocument(fresh.path, fresh.content);
+      this.openInkRuns = await this.loadInkFor(fresh.path, fresh.content);
+      this.editor?.openDocument(fresh.path, fresh.content, this.openInkRuns);
       this.recount(fresh.content);
     } catch {
       // arquivo apagado por fora

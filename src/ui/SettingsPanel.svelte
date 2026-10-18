@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { ACCENTS, EDITOR_FONTS } from "../domain/entities/theme-config";
-  import type { Workspace } from "./stores/workspace.svelte";
+  import { ACCENTS, EDITOR_FONTS, WORKSPACE_STYLES } from "../domain/entities/theme-config";
+  import { WORKSPACE_STYLE_LABELS, type Workspace } from "./stores/workspace.svelte";
 
   let { workspace }: { workspace: Workspace } = $props();
 
@@ -23,6 +23,20 @@
   </div>
 
   <div class="scroll">
+    <section>
+      <p class="eyebrow label">estilo do workspace — ⌘E</p>
+      <div class="stack">
+        {#each WORKSPACE_STYLES as style (style)}
+          <button
+            class="fontopt"
+            class:on={theme.workspaceStyle === style}
+            onclick={() => workspace.updateTheme({ workspaceStyle: style })}
+          >
+            {WORKSPACE_STYLE_LABELS[style]}
+          </button>
+        {/each}
+      </div>
+    </section>
     <section>
       <p class="eyebrow label">modo</p>
       <div class="segmented">

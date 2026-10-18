@@ -2,8 +2,10 @@ import type { Library } from "../../domain/entities/library";
 import type { Note } from "../../domain/entities/note";
 import {
   DEFAULT_THEME,
+  nextWorkspaceStyle,
   normalizeTheme,
   type ThemeConfig,
+  type WorkspaceStyle,
 } from "../../domain/entities/theme-config";
 import {
   DEFAULT_GOALS,
@@ -29,6 +31,13 @@ import { loadPosLexicon } from "../../infrastructure/pos/lexicon-loader";
 import { GUIDE_PATH, GUIDE_TEXT, GUIDE_TITLE } from "../content/guide";
 
 export type SaveState = "idle" | "pending" | "saved" | "error" | "conflict";
+
+export const WORKSPACE_STYLE_LABELS: Record<WorkspaceStyle, string> = {
+  standard: "padrão",
+  "typewriter-real": "máquina de escrever",
+  transparent: "transparência",
+  paper: "papel",
+};
 
 export interface WorkspaceDeps {
   repo: NoteRepository;
@@ -413,11 +422,13 @@ export class Workspace {
   }
 
   toggleSidebar(): void {
+    if (this.guardRealTypewriter()) return;
     this.sidebarOpen = !this.sidebarOpen;
     this.persistSettings();
   }
 
   cycleFocusMode(): void {
+    if (this.guardRealTypewriter()) return;
     const order = ["off", "sentence", "paragraph"] as const;
     const next = order[(order.indexOf(this.theme.focusMode) + 1) % order.length]!;
     this.updateTheme({ focusMode: next });
@@ -426,14 +437,30 @@ export class Workspace {
   }
 
   toggleTypewriter(): void {
+    if (this.guardRealTypewriter()) return;
     this.updateTheme({ typewriter: !this.theme.typewriter });
     this.showHud(`typewriter: ${this.theme.typewriter ? "ligado" : "desligado"}`);
   }
 
   toggleZen(): void {
+    if (this.guardRealTypewriter()) return;
     this.zenMode = !this.zenMode;
     this.editor?.focus();
     this.showHud(this.zenMode ? "zen: ligado — esc sai" : "zen: desligado");
+  }
+
+  cycleWorkspaceStyle(): void {
+    const next = nextWorkspaceStyle(this.theme.workspaceStyle);
+    this.updateTheme({ workspaceStyle: next });
+    this.editor?.focus();
+    this.showHud(`estilo: ${WORKSPACE_STYLE_LABELS[next]}`);
+  }
+
+  /** no typewriter real, foco/typewriter/sidebar/zen não se aplicam */
+  private guardRealTypewriter(): boolean {
+    if (!this.isRealTypewriter) return false;
+    this.showHud("indisponível na máquina de escrever — ⌘E troca o estilo");
+    return true;
   }
 
   /** liga/desliga o realce de classes gramaticais; carrega o léxico na primeira vez */
@@ -491,6 +518,15 @@ export class Workspace {
     }, 1700);
   }
 
+  get isRealTypewriter(): boolean {
+    return this.theme.workspaceStyle === "typewriter-real";
+  }
+
+  /** zen do usuário OU zen forçado do typewriter real (não toca em zenMode) */
+  get chromeHidden(): boolean {
+    return this.zenMode || this.isRealTypewriter;
+  }
+
   get goalProgress() {
     const target = this.goals.dailyWords;
     if (!target) return null;
@@ -501,6 +537,7 @@ export class Workspace {
   private applyThemeToDom(): void {
     const root = document.documentElement;
     root.dataset.accent = this.theme.accent;
+    root.dataset.style = this.theme.workspaceStyle;
 
     if (!this.systemDark) {
       this.systemDark = window.matchMedia("(prefers-color-scheme: dark)");

@@ -50,7 +50,7 @@
       ⌘
       <div class="pop" role="tooltip">
         <p class="pop-title">atalhos</p>
-        {#each [["⌘S", "salvar agora"], ["⌘J", "nota de hoje"], ["⌘F", "buscar no texto"], ["⌘D", "modo foco (ciclar)"], ["⌘T", "typewriter"], ["⌘⇧S", "realce de sintaxe"], ["⌘\\", "sidebar"], ["⌘⇧F", "modo zen — esc sai"], ["⌘,", "ajustes"]] as [k, label] (k)}
+        {#each [["⌘S", "salvar agora"], ["⌘J", "nota de hoje"], ["⌘F", "buscar no texto"], ["⌘D", "modo foco (ciclar)"], ["⌘T", "typewriter"], ["⌘⇧S", "realce de sintaxe"], ["⌘\\", "sidebar"], ["⌘⇧F", "modo zen — esc sai"], ["⌘E", "estilo do workspace"], ["⌘,", "ajustes"]] as [k, label] (k)}
           <div class="row"><span class="key">{k}</span><span class="what">{label}</span></div>
         {/each}
       </div>

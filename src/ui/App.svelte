@@ -11,7 +11,7 @@
   const noteLabel = $derived(workspace.note ? workspace.note.title : "sem nota");
 
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape" && workspace.zenMode) {
+    if (e.key === "Escape" && workspace.zenMode && !workspace.isRealTypewriter) {
       workspace.toggleZen();
       return;
     }
@@ -35,6 +35,9 @@
     } else if (key === "t" && !e.shiftKey) {
       e.preventDefault();
       workspace.toggleTypewriter();
+    } else if (key === "e" && !e.shiftKey) {
+      e.preventDefault();
+      workspace.cycleWorkspaceStyle();
     } else if (key === "j") {
       e.preventDefault();
       void workspace.openToday();
@@ -58,7 +61,7 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="app">
-  {#if workspace.zenMode}
+  {#if workspace.chromeHidden}
     <!-- faixa invisível para arrastar a janela sem chrome -->
     <div class="zen-drag" data-tauri-drag-region></div>
   {:else}
@@ -69,7 +72,7 @@
   {/if}
 
   <div class="body">
-    {#if workspace.sidebarOpen && !workspace.zenMode}
+    {#if workspace.sidebarOpen && !workspace.chromeHidden}
       <Sidebar {workspace} />
     {/if}
 
@@ -105,12 +108,12 @@
       {/if}
     </main>
 
-    {#if workspace.settingsOpen && !workspace.zenMode}
+    {#if workspace.settingsOpen && !workspace.chromeHidden}
       <SettingsPanel {workspace} />
     {/if}
   </div>
 
-  {#if !workspace.zenMode}
+  {#if !workspace.chromeHidden}
     <StatusBar {workspace} />
   {/if}
 

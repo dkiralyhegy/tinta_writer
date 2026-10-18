@@ -26,6 +26,8 @@ npm run check          # svelte-check / TypeScript
 | `⌘T` | typewriter scrolling |
 | `⌘\` | mostrar/ocultar sidebar |
 | `⌘⇧F` | modo zen — esconde todo o chrome; `Esc` sai |
+| `⌘E` | estilo do workspace (padrão → máquina de escrever → transparência → papel) |
+| `⌘⇧I` | tinta preta/azul/vermelha (máquina de escrever; com seleção, recolore o trecho) |
 | `⌘,` | painel de ajustes |
 | `⌘F` | buscar no texto |
 
@@ -39,16 +41,18 @@ Dependências apontam para dentro: `ui → application → domain`;
 src/
 ├── domain/           # entidades e serviços puros — zero imports externos
 │   ├── entities/     # note, library, theme-config, writing-stats
-│   └── services/     # word-count, daily-note, stats-calculator, snapshot-policy
+│   └── services/     # word-count, daily-note, stats-calculator, snapshot-policy,
+│                     # ink-runs, page-breaks, carriage, ink-wear
 ├── application/
 │   ├── ports/        # interfaces: note-repository, settings-store, stats-store, clock
 │   └── use-cases/    # open/save-note, autosave, create-today-note, track-progress…
 ├── infrastructure/
 │   ├── tauri/        # adapters das portas via invoke() dos commands Rust
-│   └── codemirror/   # editor isolado: tema iA, focus-mode, typewriter
+│   ├── codemirror/   # editor isolado: tema iA, focus-mode, typewriter
+│   └── audio/        # sons da máquina de escrever (Web Audio)
 └── ui/               # Svelte 5 (runes) — componentes + workspace store
 src-tauri/src/
-├── commands/         # notes (escrita atômica), library, snapshots, storage
+├── commands/         # notes (escrita atômica), library, snapshots, storage, ink
 └── watcher.rs        # notify + filtro de self-writes → evento "fs-changed"
 ```
 
@@ -70,6 +74,19 @@ in-memory e clock injetado.
 
 Settings e estatísticas: JSON em
 `~/Library/Application Support/com.artboeira.tinta/`.
+
+## Estilos do workspace (⌘E)
+
+- **Padrão** — o tinta de sempre.
+- **Máquina de escrever** — a tela vira uma folha que sobe; carro móvel,
+  tinta com imperfeições, sons. Tinta azul/vermelha por trecho (⌘⇧I).
+- **Transparência** — fundo translúcido com desfoque nativo opcional; o
+  texto continua opaco. Requer `macOSPrivateApi` (fora da Mac App Store).
+- **Papel** — folhas A4 paginadas; parágrafos nunca se partem entre folhas.
+
+As cores da tinta **nunca** entram na nota: ficam em
+`<biblioteca>/.ink/<nota>.json`, reancoradas pelo próprio texto se a nota
+for editada fora do tinta. Sem o lateral, a nota é só texto — como sempre.
 
 ## Fontes
 

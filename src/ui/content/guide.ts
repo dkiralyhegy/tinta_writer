@@ -68,6 +68,13 @@ quando precisar de referências.
   texto sobe.
 - **⌘\\ — sidebar.** Some com a biblioteca quando ela não é necessária.
 - **⌘⇧F — modo zen.** Esconde tudo: sobra a coluna de texto. \`Esc\` sai.
+- **⌘E — estilos.** Alterna a aparência do workspace: padrão, máquina de
+  escrever (a tela vira folha, com carro, tinta e sons), transparência e
+  papel (folhas A4). Na transparência e no papel, todos os atalhos acima
+  continuam valendo.
+- **⌘⇧I — tinta.** Na máquina de escrever, troca entre preto, azul e
+  vermelho. Com um trecho selecionado, recolore só ele. A cor nunca entra
+  no arquivo: suas notas seguem sendo texto puro.
 - Os quatro se combinam. Zen + foco em sentença + typewriter é o modo
   mais profundo de imersão que o tinta oferece.
 

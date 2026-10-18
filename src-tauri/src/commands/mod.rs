@@ -1,3 +1,4 @@
+pub mod ink;
 pub mod library;
 pub mod notes;
 pub mod snapshots;

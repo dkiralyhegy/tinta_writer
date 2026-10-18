@@ -1,7 +1,7 @@
 mod commands;
 mod watcher;
 
-use commands::{library, notes, snapshots, storage};
+use commands::{ink, library, notes, snapshots, storage};
 
 /// O WKWebView só sublinha erros de ortografia se a preferência nativa
 /// "verificar ortografia durante a digitação" estiver ligada — e em apps
@@ -36,6 +36,10 @@ pub fn run() {
             notes::create_folder,
             notes::rename_note,
             notes::delete_note,
+            ink::read_ink,
+            ink::write_ink,
+            ink::move_ink,
+            ink::trash_ink,
             library::scan_library,
             snapshots::snapshot_note,
             snapshots::list_snapshots,

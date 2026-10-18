@@ -1,3 +1,4 @@
+import { invertedEffects } from "@codemirror/commands";
 import {
   type ChangeDesc,
   type EditorState,
@@ -26,7 +27,26 @@ interface InkState extends InkMode {
 }
 
 export const setInkMode = StateEffect.define<InkMode>();
-export const replaceInkRuns = StateEffect.define<InkRun[]>();
+/** troca todos os trechos; `map` deixa o histórico reancorar efeitos guardados */
+export const replaceInkRuns = StateEffect.define<InkRun[]>({
+  map: (runs, mapping) =>
+    runs.map((r) => ({
+      ink: r.ink,
+      from: mapping.mapPos(r.from, 1),
+      to: mapping.mapPos(r.to, -1),
+    })),
+});
+
+/** limita ao documento: um lateral velho nunca pode gerar uma faixa fora dele */
+function clampRuns(runs: readonly InkRun[], length: number): InkRun[] {
+  return normalizeRuns(
+    runs.map((r) => ({
+      ink: r.ink,
+      from: Math.max(0, Math.min(r.from, length)),
+      to: Math.max(0, Math.min(r.to, length)),
+    })),
+  );
+}
 
 function mapRuns(runs: readonly InkRun[], changes: ChangeDesc, choose: boolean): InkRun[] {
   // início com assoc 1: texto inserido logo antes do trecho fica de fora;
@@ -45,7 +65,6 @@ const field = StateField.define<InkState>({
     let { runs, active, choose } = value;
     for (const e of tr.effects) {
       if (e.is(setInkMode)) ({ active, choose } = e.value);
-      if (e.is(replaceInkRuns)) runs = e.value;
     }
     if (tr.docChanged) {
       runs = mapRuns(runs, tr.changes, choose);
@@ -56,13 +75,17 @@ const field = StateField.define<InkState>({
       }
       runs = normalizeRuns(runs);
     }
+    // aplicado depois do mapeamento: desfazer restaura os trechos exatos
+    for (const e of tr.effects) {
+      if (e.is(replaceInkRuns)) runs = clampRuns(e.value, tr.newDoc.length);
+    }
     if (runs === value.runs && active === value.active && choose === value.choose) return value;
     return { runs, active, choose };
   },
 });
 
 export function inkField(initial: readonly InkRun[], mode: InkMode): Extension {
-  return field.init(() => ({ runs: normalizeRuns(initial), ...mode }));
+  return field.init((state) => ({ runs: clampRuns(initial, state.doc.length), ...mode }));
 }
 
 export function inkRunsOf(state: EditorState): InkRun[] {
@@ -80,3 +103,11 @@ export function recolorSelectionSpec(state: EditorState, ink: Ink): TransactionS
 }
 
 export { field as inkStateField };
+
+/** toda edição (ou recoloração) guarda os trechos anteriores para o ⌘Z restaurar */
+export const inkHistory: Extension = invertedEffects.of((tr) => {
+  if (!tr.docChanged && !tr.effects.some((e) => e.is(replaceInkRuns))) return [];
+  const before = inkRunsOf(tr.startState);
+  if (before.length === 0 && inkRunsOf(tr.state).length === 0) return [];
+  return [replaceInkRuns.of(before)];
+});

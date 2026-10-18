@@ -1,7 +1,6 @@
-import { invertedEffects } from "@codemirror/commands";
 import type { Extension } from "@codemirror/state";
 import { Decoration, EditorView } from "@codemirror/view";
-import { inkRunsOf, inkStateField, replaceInkRuns } from "./ink-field";
+import { inkHistory, inkRunsOf, inkStateField } from "./ink-field";
 
 const marks = {
   blue: Decoration.mark({ class: "cm-ink-blue" }),
@@ -13,11 +12,4 @@ const decorations = EditorView.decorations.compute([inkStateField], (state) =>
   Decoration.set(inkRunsOf(state).map((r) => marks[r.ink].range(r.from, r.to))),
 );
 
-/** ⌘Z desfaz uma recoloração como desfaz texto */
-const undoableRecolor = invertedEffects.of((tr) =>
-  tr.effects.some((e) => e.is(replaceInkRuns))
-    ? [replaceInkRuns.of(inkRunsOf(tr.startState))]
-    : [],
-);
-
-export const inkDecorations: Extension = [decorations, undoableRecolor];
+export const inkDecorations: Extension = [decorations, inkHistory];

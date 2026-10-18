@@ -8,10 +8,10 @@ import {
 import { EditorView, keymap } from "@codemirror/view";
 import type { Ink, ThemeConfig } from "../../domain/entities/theme-config";
 import type { InkRun } from "../../domain/services/ink-runs";
-import { inkDecorations } from "./ink";
-import { inkField, inkRunsOf, recolorSelectionSpec, setInkMode, type InkMode } from "./ink-field";
 import type { PosLexicon } from "../../domain/services/pos-lexicon";
 import { wordDelta } from "../../domain/services/word-count";
+import { inkDecorations } from "./ink";
+import { inkField, inkRunsOf, recolorSelectionSpec, setInkMode, type InkMode } from "./ink-field";
 import { focusMode } from "./focus-mode";
 import {
   clearGrammarIssues,

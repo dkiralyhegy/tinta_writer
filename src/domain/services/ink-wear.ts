@@ -38,3 +38,29 @@ export function wearFor(code: number, context: string, wear: number): WearStyle 
     faint: r(24) < 0.1 * wear,
   };
 }
+
+const MARK = /^\p{M}$/u;
+
+/**
+ * Fim (índice UTF-16, exclusivo) do aglomerado que começa em `i`: o ponto de
+ * código base (par substituto conta como um), seguido de marcas combinantes e
+ * de sequências ZWJ + próximo ponto de código.
+ */
+export function clusterEnd(text: string, i: number): number {
+  const size = (at: number) => ((text.codePointAt(at) ?? 0) > 0xffff ? 2 : 1);
+  let j = Math.min(text.length, i + size(i));
+  while (j < text.length) {
+    if (text.charCodeAt(j) === 0x200d) {
+      j++;
+      if (j < text.length) j += size(j);
+      continue;
+    }
+    const n = size(j);
+    if (MARK.test(text.slice(j, j + n))) {
+      j += n;
+      continue;
+    }
+    break;
+  }
+  return j;
+}

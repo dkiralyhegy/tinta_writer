@@ -12,7 +12,7 @@ import {
   ViewPlugin,
   type ViewUpdate,
 } from "@codemirror/view";
-import { wearFor } from "../../domain/services/ink-wear";
+import { clusterEnd, wearFor } from "../../domain/services/ink-wear";
 import {
   carriageEvents,
   type CarriageAction,
@@ -104,17 +104,17 @@ function carriagePlugin(hooks: TypewriterHooks) {
             this.pending = { action: null, text: "" };
             if (!m) return;
 
+            const reduce = reducedMotion();
             let events: CarriageEvent[] = [];
             if (action && this.prev) {
               const r = carriageEvents({ action, text, prev: this.prev, next: m.snapshot, bellRung: this.bellRung });
               events = r.events;
               this.bellRung = r.bellRung;
               if (events.length) hooks.onEvents(events);
-              if (events.includes("key") || events.includes("space")) jolt(v.dom);
+              if (!reduce && (events.includes("key") || events.includes("space"))) jolt(v.dom);
             }
             this.prev = m.snapshot;
 
-            const reduce = reducedMotion();
             const isReturn = events.includes("return");
             const ms = isReturn ? RETURN_MS : action === "move" ? MOVE_MS : ESCAPE_MS;
             const ease = isReturn ? "cubic-bezier(0.2, 0.8, 0.2, 1)" : "linear";
@@ -173,24 +173,27 @@ function wearPlugin(wear: number) {
             const end = Math.min(line.to, to);
             const text = line.text;
             let wordStart = -1;
-            for (let p = pos; p < end; p++) {
+            for (let p = pos; p < end; ) {
               const i = p - line.from;
               const ch = text[i]!;
               if (isSpaceChar(ch)) {
                 if (wordStart >= 0) words.push(word.range(wordStart, p));
                 wordStart = -1;
+                p++;
                 continue;
               }
               if (wordStart < 0) wordStart = p;
-              const w = wearFor(ch.charCodeAt(0), text.slice(Math.max(0, i - 3), i), wear)!;
+              const stop = Math.min(line.to, line.from + clusterEnd(text, i));
+              const w = wearFor(text.codePointAt(i)!, text.slice(Math.max(0, i - 3), i), wear)!;
               out.push(
                 Decoration.mark({
                   class: w.faint ? "tw-ch tw-faint" : "tw-ch",
                   attributes: {
                     style: `--o:${w.opacity.toFixed(3)};--dy:${w.dy.toFixed(2)}px;--r:${w.rot.toFixed(2)}deg;--bleed:${w.bleed.toFixed(2)}px`,
                   },
-                }).range(p, p + 1),
+                }).range(p, stop),
               );
+              p = stop;
             }
             if (wordStart >= 0) words.push(word.range(wordStart, end));
             pos = line.to + 1;
@@ -227,6 +230,8 @@ const strikeField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 });
 
+const strikeTimers = new WeakMap<EditorView, number>();
+
 const strikeOnInput = EditorView.updateListener.of((u) => {
   const typed = u.transactions.some((t) => t.isUserEvent("input.type"));
   if (!typed) return;
@@ -242,19 +247,30 @@ const strikeOnInput = EditorView.updateListener.of((u) => {
   const active = () => view.state.field(strikeField, false) !== undefined;
   requestAnimationFrame(() => {
     if (!active()) return;
-    view.dispatch({ effects: addStrike.of(range!) });
-    setTimeout(() => {
-      if (!active()) return;
-      view.dispatch({ effects: clearStrike.of(null) });
-    }, 80);
+    const len = view.state.doc.length;
+    const from = Math.min(range!.from, len);
+    const to = Math.min(range!.to, len);
+    if (to <= from) return;
+    view.dispatch({ effects: addStrike.of({ from, to }) });
+    const prev = strikeTimers.get(view);
+    if (prev !== undefined) clearTimeout(prev);
+    strikeTimers.set(
+      view,
+      window.setTimeout(() => {
+        strikeTimers.delete(view);
+        if (!active()) return;
+        view.dispatch({ effects: clearStrike.of(null) });
+      }, 80),
+    );
   });
 });
 
-/** tranco de 1 px na folha a cada batida */
+/** tranco de 1 px na folha a cada batida (WAAPI: o CodeMirror reescreve o class do .cm-editor) */
 function jolt(dom: HTMLElement) {
-  dom.classList.remove("tw-jolt");
-  void dom.offsetWidth; // reinicia a animação
-  dom.classList.add("tw-jolt");
+  dom.animate([{ transform: "none" }, { transform: "translateY(1px)", offset: 0.5 }, { transform: "none" }], {
+    duration: 70,
+    easing: "ease-out",
+  });
 }
 
 export function realTypewriter(hooks: TypewriterHooks, wear: number): Extension {

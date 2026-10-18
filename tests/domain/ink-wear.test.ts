@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { wearFor } from "../../src/domain/services/ink-wear";
+import { clusterEnd, wearFor } from "../../src/domain/services/ink-wear";
 
 const A = "a".charCodeAt(0);
 
@@ -32,5 +32,25 @@ describe("wearFor", () => {
     for (let i = 0; i < 4000; i++) if (wearFor(97 + (i % 26), String(i), 0.5)!.faint) faint++;
     expect(faint / 4000).toBeGreaterThan(0.03);
     expect(faint / 4000).toBeLessThan(0.07);
+  });
+});
+
+describe("clusterEnd", () => {
+  it("ASCII: um caractere", () => {
+    expect(clusterEnd("abc", 0)).toBe(1);
+    expect(clusterEnd("abc", 2)).toBe(3);
+  });
+  it("letra + acento combinante (NFD) é um aglomerado de 2", () => {
+    expect(clusterEnd("a\u0301b", 0)).toBe(2);
+  });
+  it("par substituto (emoji) é um aglomerado de 2", () => {
+    expect(clusterEnd("😀a", 0)).toBe(2);
+  });
+  it("sequência ZWJ vira um aglomerado só", () => {
+    const fam = "👨\u200d👩\u200d👧";
+    expect(clusterEnd(fam + "x", 0)).toBe(fam.length);
+  });
+  it("emoji com seletor de variação", () => {
+    expect(clusterEnd("❤\ufe0fa", 0)).toBe(2);
   });
 });

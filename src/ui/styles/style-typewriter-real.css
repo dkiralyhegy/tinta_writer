@@ -125,8 +125,7 @@
 }
 
 /* impacto da tecla */
-.tinta-tw-real .tw-strike .tw-ch,
-.tinta-tw-real .tw-strike {
+.tinta-tw-real .tw-strike .tw-ch {
   animation: tw-strike 60ms ease-out;
 }
 
@@ -137,20 +136,8 @@
   }
 }
 
-.tinta-tw-real.tw-jolt {
-  animation: tw-jolt 70ms ease-out;
-}
-
-@keyframes tw-jolt {
-  50% {
-    transform: translateY(1px);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .tinta-tw-real .tw-strike,
-  .tinta-tw-real .tw-strike .tw-ch,
-  .tinta-tw-real.tw-jolt {
+  .tinta-tw-real .tw-strike .tw-ch {
     animation: none;
   }
 }

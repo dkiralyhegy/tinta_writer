@@ -429,6 +429,16 @@ export class Workspace {
       const runs = editor.currentInkRuns();
       // sessão da nota que estamos salvando, capturada antes de qualquer await
       const session = this.inkSession;
+      if (text === note.content) {
+        // só as cores mudaram: a nota em disco não é tocada (sem mtime, sem conflito)
+        const inkSaved = await this.persistInk(note.path, text, runs, session);
+        if (this.note?.path === note.path) {
+          if (inkSaved) this.inkSession = inkSaved;
+          if (this.saveState !== "pending" || !this.autosave.isDirty) this.saveState = "saved";
+        }
+        void this.deps.tracker.flush().catch(() => {});
+        return;
+      }
       const outcome = await saveNote(this.deps.repo, note, text);
       if (outcome.conflictPath) {
         // o disco mudou por fora: nossa edição foi preservada no .conflict —

@@ -150,6 +150,8 @@ export class Workspace {
 
   /** Guia inicial: nota virtual, editável mas nunca salva. */
   openGuide(): void {
+    // invalida qualquer openPath em andamento
+    this.openSeq++;
     void this.autosave.flushNow().catch(() => {});
     this.note = {
       path: GUIDE_PATH,
@@ -189,7 +191,9 @@ export class Workspace {
   async chooseRoot(): Promise<void> {
     const folder = await this.deps.pickFolder();
     if (!folder) return;
+    this.openSeq++;
     await this.flushAll();
+    this.openSeq++;
     this.note = null;
     await this.attachRoot(folder);
     this.persistSettings();
@@ -347,7 +351,7 @@ export class Workspace {
 
   async deleteNote(path: string): Promise<void> {
     await this.deps.repo.delete(path);
-    await this.inkFollow((s, r) => s.trash(r, path));
+    if (!(await this.inkFollow((s, r) => s.trash(r, path)))) this.inkFollowFailed();
     this.editor?.forget(path);
     if (this.note?.path === path) {
       this.note = null;
@@ -375,7 +379,7 @@ export class Workspace {
   /** exclui a pasta inteira — vai para a Lixeira do macOS, recuperável */
   async deleteFolder(path: string): Promise<void> {
     await this.deps.repo.delete(path);
-    await this.inkFollow((s, r) => s.trash(r, path));
+    if (!(await this.inkFollow((s, r) => s.trash(r, path)))) this.inkFollowFailed();
     this.editor?.forgetUnder(path);
     if (this.note && (this.note.path === path || this.note.path.startsWith(`${path}/`))) {
       this.note = null;

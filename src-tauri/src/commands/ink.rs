@@ -59,6 +59,30 @@ pub fn write_ink(root: String, path: String, content: Option<String>) -> Result<
     }
 }
 
+/// Move cada arquivo de `src` para o mesmo caminho relativo em `dest`
+/// (sobrescrevendo órfãos) e remove os diretórios de origem já vazios.
+/// Ambos já vêm de `rel_in_ink`; os nomes lidos de `read_dir` são sempre
+/// componentes simples, então nada escapa de `.ink/`.
+fn merge_dir(src: &Path, dest: &Path) -> Result<(), String> {
+    fs::create_dir_all(dest).map_err(|e| format!("mover tinta: {e}"))?;
+    let entries = fs::read_dir(src).map_err(|e| format!("mover tinta: {e}"))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("mover tinta: {e}"))?;
+        let from = entry.path();
+        let to = dest.join(entry.file_name());
+        let kind = entry.file_type().map_err(|e| format!("mover tinta: {e}"))?;
+        if kind.is_dir() {
+            merge_dir(&from, &to)?;
+        } else {
+            if to.is_dir() {
+                fs::remove_dir_all(&to).map_err(|e| format!("limpar tinta antiga: {e}"))?;
+            }
+            fs::rename(&from, &to).map_err(|e| format!("mover tinta: {e}"))?;
+        }
+    }
+    fs::remove_dir(src).map_err(|e| format!("mover tinta: {e}"))
+}
+
 /// Chamado DEPOIS do rename da nota/pasta: `to` já existe em disco.
 #[tauri::command]
 pub fn move_ink(root: String, from: String, to: String) -> Result<(), String> {
@@ -73,6 +97,9 @@ pub fn move_ink(root: String, from: String, to: String) -> Result<(), String> {
     if dest.is_file() {
         // lateral órfão de uma nota antiga com o mesmo nome
         fs::remove_file(&dest).map_err(|e| format!("limpar tinta antiga: {e}"))?;
+    } else if dest.is_dir() {
+        // a pasta de destino já tem laterais (órfãos): funde em vez de abandonar
+        return merge_dir(&src, &dest);
     } else if dest.exists() {
         return Ok(());
     }
@@ -163,6 +190,30 @@ mod tests {
         move_ink(root.clone(), from, to).unwrap();
         assert!(!lib.join(".ink/a.md.json").exists());
         assert_eq!(fs::read_to_string(lib.join(".ink/b.md.json")).unwrap(), "x");
+        let _ = fs::remove_dir_all(&lib);
+    }
+
+    #[test]
+    fn move_ink_de_pasta_funde_quando_o_destino_ja_existe() {
+        let lib = tmp_lib("merge");
+        let root = lib.to_string_lossy().to_string();
+        let ink = lib.join(".ink");
+        fs::create_dir_all(ink.join("a/sub")).unwrap();
+        fs::write(ink.join("a/x.md.json"), "novo-x").unwrap();
+        fs::write(ink.join("a/sub/y.md.json"), "novo-y").unwrap();
+        // destino com órfãos: um conflitante e um sem relação
+        fs::create_dir_all(ink.join("b")).unwrap();
+        fs::write(ink.join("b/x.md.json"), "velho-x").unwrap();
+        fs::write(ink.join("b/z.md.json"), "z").unwrap();
+        // a pasta já foi renomeada em disco
+        fs::create_dir_all(lib.join("b")).unwrap();
+        let from = lib.join("a").to_string_lossy().to_string();
+        let to = lib.join("b").to_string_lossy().to_string();
+        move_ink(root, from, to).unwrap();
+        assert!(!ink.join("a").exists());
+        assert_eq!(fs::read_to_string(ink.join("b/x.md.json")).unwrap(), "novo-x");
+        assert_eq!(fs::read_to_string(ink.join("b/sub/y.md.json")).unwrap(), "novo-y");
+        assert_eq!(fs::read_to_string(ink.join("b/z.md.json")).unwrap(), "z");
         let _ = fs::remove_dir_all(&lib);
     }
 

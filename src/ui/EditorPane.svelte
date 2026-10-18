@@ -10,6 +10,7 @@
     const editor = new CmEditor(host, workspace.theme, {
       onDocChanged: (getText, delta) => workspace.onDocChanged(getText, delta),
       onSave: () => void workspace.saveNow(),
+      onPageInfo: (info) => workspace.onPageInfo(info),
     });
     workspace.attachEditor(editor);
     return () => editor.destroy();

@@ -11,6 +11,7 @@ import "./ui/styles/fonts.css";
 import "./ui/styles/tokens.css";
 import "./ui/styles/app.css";
 import "./ui/styles/style-transparent.css";
+import "./ui/styles/style-paper.css";
 
 import { systemClock } from "./application/ports/clock";
 import { ProgressTracker } from "./application/use-cases/track-progress";

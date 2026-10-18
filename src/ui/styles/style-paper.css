@@ -1,0 +1,49 @@
+/* ─────────────────────────────────────────────────────────────────
+   estilo papel — folhas A4 sobre uma mesa. A sombra das folhas é a
+   única exceção ao "sem sombras" do brandbook, restrita a este estilo.
+   ─────────────────────────────────────────────────────────────── */
+
+:root[data-style="paper"] {
+  --tinta-desk: #d9d2c8;
+  --tinta-sheet: #ffffff;
+}
+
+:root[data-style="paper"][data-theme="dark"] {
+  --tinta-desk: #1a1a1b;
+  --tinta-sheet: #2a2a2b;
+}
+
+/* isolation: a layer das folhas (z-index negativo) fica acima do fundo da mesa */
+.tinta-paper .cm-scroller {
+  background: var(--tinta-desk);
+  isolation: isolate;
+}
+
+/* com ⌘T ligado, vale a folga do typewriter scrolling */
+.tinta-paper:not(.tinta-typewriter) .cm-content {
+  padding-top: 32px !important;
+  padding-bottom: 32px !important;
+}
+
+.tinta-paper-layer {
+  z-index: -2;
+}
+
+.tinta-sheet {
+  position: absolute;
+  background: var(--tinta-sheet);
+  box-shadow: 0 2px 12px rgb(0 0 0 / 0.12);
+}
+
+.tinta-sheet::after {
+  content: attr(data-page);
+  position: absolute;
+  bottom: 18px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--ab-font-mono);
+  font-size: var(--ab-size-eyebrow);
+  letter-spacing: var(--ab-tracking-wide);
+  color: var(--tinta-dim);
+}

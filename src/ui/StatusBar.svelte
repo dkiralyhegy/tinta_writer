@@ -44,6 +44,9 @@
   </div>
 
   <div class="cell right">
+    {#if workspace.pageInfo}
+      <span class="dim">página {workspace.pageInfo.page} de {workspace.pageInfo.total}</span>
+    {/if}
     {#if modeLabel}<span class="dim">{modeLabel}</span>{/if}
     <span class="save" data-state={workspace.saveState}>{saveLabel}</span>
     <span class="help" tabindex="0" aria-label="atalhos de teclado">

@@ -1,4 +1,10 @@
-import { Compartment, EditorState, type Text } from "@codemirror/state";
+import {
+  Compartment,
+  EditorState,
+  type Extension,
+  type StateEffect,
+  type Text,
+} from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import type { ThemeConfig } from "../../domain/entities/theme-config";
 import type { PosLexicon } from "../../domain/services/pos-lexicon";
@@ -10,6 +16,7 @@ import {
   setGrammarIssues,
   type DocGrammarIssue,
 } from "./grammar";
+import { type PageInfo, paperPages } from "./paper-pages";
 import { posHighlight } from "./pos-highlight";
 import { buildTheme } from "./ia-writer-theme";
 import { baseExtensions, revisionAttributes } from "./markdown-setup";
@@ -20,7 +27,12 @@ export interface EditorEvents {
   /** getText é lazy — só materializa a string quando o save realmente rodar */
   onDocChanged(getText: () => string, wordDelta: number): void;
   onSave(): void;
+  /** folha atual / total no estilo papel; null fora dele */
+  onPageInfo?(info: PageInfo | null): void;
 }
+
+/** o que muda a extensão do estilo: o próprio estilo e o desgaste da tinta */
+const styleKeyOf = (config: ThemeConfig) => `${config.workspaceStyle}:${config.inkWear}`;
 
 const isSpace = (ch: string | undefined) =>
   ch === " " || ch === "\n" || ch === "\t" || ch === "\r" || ch === undefined;
@@ -51,6 +63,9 @@ export class CmEditor {
   private readonly styleCompartment = new Compartment();
   private readonly posCompartment = new Compartment();
   private readonly grammarCompartment = new Compartment();
+  private readonly styleModeCompartment = new Compartment();
+  /** chave do que está no styleModeCompartment — evita recriar plugins a cada ajuste */
+  private appliedStyleKey: string | null = null;
   private readonly stateCache = new Map<string, EditorState>();
   private currentPath: string | null = null;
   private posLexicon: PosLexicon | null = null;
@@ -65,6 +80,7 @@ export class CmEditor {
   }
 
   private makeState(content: string): EditorState {
+    this.appliedStyleKey = styleKeyOf(this.config);
     return EditorState.create({
       doc: content,
       extensions: [
@@ -87,6 +103,7 @@ export class CmEditor {
         this.styleCompartment.of(this.config.styleCheck ? styleCheck() : []),
         this.posCompartment.of(this.posExtension(this.config)),
         this.grammarCompartment.of(this.config.grammarCheck ? grammarExtension() : []),
+        this.styleModeCompartment.of(this.styleExtension(this.config)),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
           let delta = 0;
@@ -112,6 +129,7 @@ export class CmEditor {
     if (cached && cached.doc.toString() === content) {
       this.view.setState(cached);
       // o cache pode ter sido criado com config antiga — reaplica a atual
+      this.appliedStyleKey = null;
       this.applyConfig(this.config);
     } else {
       this.view.setState(this.makeState(content));
@@ -138,25 +156,40 @@ export class CmEditor {
 
   applyConfig(config: ThemeConfig): void {
     this.config = config;
-    this.view.dispatch({
-      effects: [
-        this.themeCompartment.reconfigure(buildTheme(config)),
-        this.focusCompartment.reconfigure(focusMode(config.focusMode)),
-        this.typewriterCompartment.reconfigure(config.typewriter ? typewriter() : []),
-        this.revisionCompartment.reconfigure(
-          revisionAttributes(config.spellcheck, config.autocorrect),
-        ),
-        this.styleCompartment.reconfigure(config.styleCheck ? styleCheck() : []),
-        this.posCompartment.reconfigure(this.posExtension(config)),
-        this.grammarCompartment.reconfigure(config.grammarCheck ? grammarExtension() : []),
-      ],
-    });
+    const effects: StateEffect<unknown>[] = [
+      this.themeCompartment.reconfigure(buildTheme(config)),
+      this.focusCompartment.reconfigure(focusMode(config.focusMode)),
+      this.typewriterCompartment.reconfigure(config.typewriter ? typewriter() : []),
+      this.revisionCompartment.reconfigure(
+        revisionAttributes(config.spellcheck, config.autocorrect),
+      ),
+      this.styleCompartment.reconfigure(config.styleCheck ? styleCheck() : []),
+      this.posCompartment.reconfigure(this.posExtension(config)),
+      this.grammarCompartment.reconfigure(config.grammarCheck ? grammarExtension() : []),
+    ];
+    const key = styleKeyOf(config);
+    if (key !== this.appliedStyleKey) {
+      effects.push(this.styleModeCompartment.reconfigure(this.styleExtension(config)));
+      this.appliedStyleKey = key;
+    }
+    this.view.dispatch({ effects });
+    if (config.workspaceStyle !== "paper") this.events.onPageInfo?.(null);
   }
 
   private posExtension(config: ThemeConfig) {
     return config.posHighlight && this.posLexicon
       ? posHighlight(this.posLexicon, config)
       : [];
+  }
+
+  /** extensão do estilo do workspace ativo (⌘E) */
+  private styleExtension(config: ThemeConfig): Extension {
+    switch (config.workspaceStyle) {
+      case "paper":
+        return paperPages((info) => this.events.onPageInfo?.(info));
+      default:
+        return [];
+    }
   }
 
   /** injeta o léxico carregado (lazy) e ativa o realce se configurado */

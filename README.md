@@ -85,7 +85,7 @@ Settings e estatísticas: JSON em
 - **Papel** — folhas A4 paginadas; parágrafos nunca se partem entre folhas.
 
 As cores da tinta **nunca** entram na nota: ficam em
-`<biblioteca>/.ink/<nota>.json`, reancoradas pelo próprio texto se a nota
+`<biblioteca>/.ink/<caminho relativo da nota>.json` (ex.: `.ink/livro/cap-01.md.json`), reancoradas pelo próprio texto se a nota
 for editada fora do tinta. Sem o lateral, a nota é só texto — como sempre.
 
 ## Fontes

@@ -75,7 +75,7 @@ quando precisar de referências.
 - **⌘⇧I — tinta.** Na máquina de escrever, troca entre preto, azul e
   vermelho. Com um trecho selecionado, recolore só ele. A cor nunca entra
   no arquivo: suas notas seguem sendo texto puro.
-- Os quatro se combinam. Zen + foco em sentença + typewriter é o modo
+- Foco, typewriter, sidebar e zen se combinam. Zen + foco em sentença + typewriter é o modo
   mais profundo de imersão que o tinta oferece.
 
 ## a sua aparência

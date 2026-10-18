@@ -99,6 +99,8 @@ export class Workspace {
   private hudTimer: ReturnType<typeof setTimeout> | null = null;
   private hudSeq = 0;
   private systemDark: MediaQueryList | null = null;
+  /** token de "abertura mais recente" — invalida awaits de aberturas antigas */
+  private openSeq = 0;
   private inkSession: InkSession = FRESH_INK_SESSION;
   /** trechos da nota aberta, para o editor que ainda vai montar (attachEditor) */
   private openInkRuns: InkRun[] = [];
@@ -199,37 +201,50 @@ export class Workspace {
   // ── notas ────────────────────────────────────────────────────────
 
   async openPath(path: string): Promise<void> {
+    const seq = ++this.openSeq;
     await this.autosave.flushNow().catch(() => {});
     const note = await openNote(this.deps.repo, path);
+    const ink = await this.loadInkFor(note.path, note.content);
+    // abertura mais nova venceu durante os awaits: esta fica obsoleta
+    if (seq !== this.openSeq) return;
+    // daqui até o fim: tudo síncrono — nota, sessão e editor mudam juntos
     this.note = note;
     this.saveState = "idle";
     this.conflictNotice = null;
-    this.openInkRuns = await this.loadInkFor(note.path, note.content);
-    this.editor?.openDocument(note.path, note.content, this.openInkRuns);
+    this.inkSession = ink.session;
+    this.openInkRuns = ink.runs;
+    this.editor?.openDocument(note.path, note.content, ink.runs);
     this.recount(note.content);
     this.persistSettings();
     this.grammarSession?.checkSoon();
   }
 
   /** lateral de tinta da nota; falha de leitura = trata como ilegível (não sobrescreve) */
-  private async loadInkFor(path: string, content: string): Promise<InkRun[]> {
+  private async loadInkFor(
+    path: string,
+    content: string,
+  ): Promise<{ runs: InkRun[]; session: InkSession }> {
     if (!this.library || this.isGuide(path)) {
-      this.inkSession = FRESH_INK_SESSION;
-      return [];
+      return { runs: [], session: FRESH_INK_SESSION };
     }
     try {
-      const { runs, session } = await loadInk(this.deps.inkStore, this.library.rootPath, path, content);
-      this.inkSession = session;
-      return runs;
+      return await loadInk(this.deps.inkStore, this.library.rootPath, path, content);
     } catch {
-      this.inkSession = { lastSaved: null, unreadable: true };
-      return [];
+      return { runs: [], session: { lastSaved: null, unreadable: true } };
     }
   }
 
-  private inkFollow(op: (store: InkStore, root: string) => Promise<void>): Promise<void> {
-    if (!this.library) return Promise.resolve();
-    return op(this.deps.inkStore, this.library.rootPath).catch(() => {});
+  /** nunca lança; devolve false se o lateral não acompanhou */
+  private inkFollow(op: (store: InkStore, root: string) => Promise<void>): Promise<boolean> {
+    if (!this.library) return Promise.resolve(true);
+    return op(this.deps.inkStore, this.library.rootPath).then(
+      () => true,
+      () => false,
+    );
+  }
+
+  private inkFollowFailed(): void {
+    this.showHud("cores não acompanharam a nota");
   }
 
   async openToday(): Promise<void> {
@@ -264,7 +279,8 @@ export class Workspace {
     if (to === path) return;
     await this.autosave.flushNow().catch(() => {});
     await this.deps.repo.rename(path, to);
-    await this.inkFollow((s, r) => s.move(r, path, to));
+    const inkOk = await this.inkFollow((s, r) => s.move(r, path, to));
+    if (!inkOk) this.inkFollowFailed();
     this.editor?.forget(path);
     if (this.note?.path === path) await this.openPath(to);
     await this.refreshLibrary();
@@ -294,12 +310,13 @@ export class Workspace {
     try {
       await this.autosave.flushNow().catch(() => {});
       await this.deps.repo.rename(move.srcPath, to);
-      await this.inkFollow((s, r) => s.move(r, move.srcPath, to));
+      const inkOk = await this.inkFollow((s, r) => s.move(r, move.srcPath, to));
       this.editor?.forgetUnder(move.srcPath);
       const reopen = this.translatedNotePath(move.srcPath, to);
       await this.refreshLibrary();
       if (reopen) await this.openPath(reopen);
       this.showHud(`movido para ${move.destName}`);
+      if (!inkOk) this.inkFollowFailed();
     } catch {
       this.showHud("não foi possível mover — nome já existe no destino?");
       await this.refreshLibrary();
@@ -338,7 +355,8 @@ export class Workspace {
     if (to === path) return;
     await this.autosave.flushNow().catch(() => {});
     await this.deps.repo.rename(path, to);
-    await this.inkFollow((s, r) => s.move(r, path, to));
+    const inkOk = await this.inkFollow((s, r) => s.move(r, path, to));
+    if (!inkOk) this.inkFollowFailed();
     this.editor?.forgetUnder(path);
     const reopen = this.translatedNotePath(path, to);
     await this.refreshLibrary();
@@ -400,6 +418,8 @@ export class Workspace {
     try {
       const text = editor.currentText();
       const runs = editor.currentInkRuns();
+      // sessão da nota que estamos salvando, capturada antes de qualquer await
+      const session = this.inkSession;
       const outcome = await saveNote(this.deps.repo, note, text);
       if (outcome.conflictPath) {
         // o disco mudou por fora: nossa edição foi preservada no .conflict —
@@ -408,16 +428,21 @@ export class Workspace {
         this.saveState = "conflict";
         this.editor?.forget(note.path);
         const conflictNote = await openNote(this.deps.repo, outcome.conflictPath);
-        this.note = conflictNote;
-        // as cores acompanham a edição preservada no .conflict
-        this.inkSession = FRESH_INK_SESSION;
-        await this.persistInk(conflictNote.path, text, runs);
-        this.openInkRuns = runs;
-        this.editor?.openDocument(conflictNote.path, conflictNote.content, runs);
+        // as cores acompanham a edição preservada no .conflict (sessão nova)
+        const inkSaved = await this.persistInk(conflictNote.path, text, runs, FRESH_INK_SESSION);
+        // outra nota foi aberta durante os awaits: não a sobrescreve
+        if (this.note?.path === note.path) {
+          this.note = conflictNote;
+          this.inkSession = inkSaved ?? FRESH_INK_SESSION;
+          this.openInkRuns = runs;
+          this.editor?.openDocument(conflictNote.path, conflictNote.content, runs);
+        }
         await this.refreshLibrary();
       } else {
         this.note = outcome.note;
-        await this.persistInk(note.path, text, runs);
+        const inkSaved = await this.persistInk(note.path, text, runs, session);
+        // o resultado só vale se a nota ainda é a mesma
+        if (inkSaved && this.note?.path === note.path) this.inkSession = inkSaved;
         if (this.saveState !== "pending" || !this.autosave.isDirty) this.saveState = "saved";
       }
       void this.deps.tracker.flush().catch(() => {});
@@ -428,20 +453,31 @@ export class Workspace {
   }
 
   /** a nota já está salva; falha aqui só perde cor, nunca texto */
-  private async persistInk(path: string, text: string, runs: readonly InkRun[]): Promise<void> {
-    if (!this.library) return;
+  private async persistInk(
+    path: string,
+    text: string,
+    runs: readonly InkRun[],
+    session: InkSession,
+  ): Promise<InkSession | null> {
+    if (!this.library) return null;
     try {
-      this.inkSession = await saveInk(
+      return await saveInk(
         this.deps.inkStore,
         this.library.rootPath,
         path,
         text,
         runs,
-        this.inkSession,
+        session,
       );
     } catch {
       this.showHud("cores não salvas — nova tentativa no próximo save");
+      return null;
     }
+  }
+
+  /** método (não inline) para o TS não estreitar saveState entre awaits */
+  private hasUnsavedEdits(): boolean {
+    return this.saveState === "pending" || this.autosave.isDirty;
   }
 
   private async onExternalChange(paths: string[]): Promise<void> {
@@ -454,16 +490,24 @@ export class Workspace {
       return;
     }
     // sem edição pendente: recarrega silenciosamente a versão nova
+    const seq = ++this.openSeq;
     try {
-      this.editor?.forget(current.path);
       const fresh = await openNote(this.deps.repo, current.path);
+      const ink = await this.loadInkFor(fresh.path, fresh.content);
+      // outra abertura, troca de nota ou edição durante os awaits: abandona
+      if (seq !== this.openSeq) return;
+      if (this.note?.path !== current.path) return;
+      if (this.hasUnsavedEdits()) return;
+      // daqui até o fim: tudo síncrono
+      this.editor?.forget(current.path);
       this.note = fresh;
-      this.openInkRuns = await this.loadInkFor(fresh.path, fresh.content);
-      this.editor?.openDocument(fresh.path, fresh.content, this.openInkRuns);
+      this.inkSession = ink.session;
+      this.openInkRuns = ink.runs;
+      this.editor?.openDocument(fresh.path, fresh.content, ink.runs);
       this.recount(fresh.content);
     } catch {
       // arquivo apagado por fora
-      this.note = null;
+      if (seq === this.openSeq) this.note = null;
     }
   }
 

@@ -5,6 +5,8 @@
   import EditorPane from "./EditorPane.svelte";
   import StatusBar from "./StatusBar.svelte";
   import SettingsPanel from "./SettingsPanel.svelte";
+  import InkRibbon from "./InkRibbon.svelte";
+  import TypewriterControls from "./TypewriterControls.svelte";
 
   let { workspace }: { workspace: Workspace } = $props();
 
@@ -20,6 +22,9 @@
     if (key === "f" && e.shiftKey) {
       e.preventDefault();
       workspace.toggleZen();
+    } else if (key === "i" && e.shiftKey) {
+      e.preventDefault();
+      workspace.cycleInk();
     } else if (key === "s" && e.shiftKey) {
       e.preventDefault();
       void workspace.togglePosHighlight();
@@ -105,6 +110,12 @@
           <button onclick={() => void workspace.confirmMove()}>mover</button>
           <button onclick={() => workspace.cancelMove()}>cancelar</button>
         </div>
+      {/if}
+      {#if workspace.isRealTypewriter && workspace.note}
+        <InkRibbon {workspace} />
+        {#if workspace.settingsOpen}
+          <TypewriterControls {workspace} />
+        {/if}
       {/if}
     </main>
 

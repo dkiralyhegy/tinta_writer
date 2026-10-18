@@ -2,8 +2,10 @@ import type { Library } from "../../domain/entities/library";
 import type { Note } from "../../domain/entities/note";
 import {
   DEFAULT_THEME,
+  nextInk,
   nextWorkspaceStyle,
   normalizeTheme,
+  type Ink,
   type ThemeConfig,
   type WorkspaceStyle,
 } from "../../domain/entities/theme-config";
@@ -48,6 +50,8 @@ export const WORKSPACE_STYLE_LABELS: Record<WorkspaceStyle, string> = {
   transparent: "transparência",
   paper: "papel",
 };
+
+export const INK_LABELS: Record<Ink, string> = { black: "preta", blue: "azul", red: "vermelha" };
 
 export interface WorkspaceDeps {
   repo: NoteRepository;
@@ -578,6 +582,27 @@ export class Workspace {
     this.updateTheme({ workspaceStyle: next });
     this.editor?.focus();
     this.showHud(`estilo: ${WORKSPACE_STYLE_LABELS[next]}`);
+  }
+
+  /** ⌘⇧I — próxima tinta; com seleção, recolore só o trecho */
+  cycleInk(): void {
+    this.chooseInk(nextInk(this.theme.ink));
+  }
+
+  chooseInk(ink: Ink): void {
+    if (!this.isRealTypewriter) return;
+    const recolored = this.editor?.recolorSelection(ink) ?? false;
+    if (recolored) this.markInkDirty();
+    this.updateTheme({ ink });
+    this.editor?.focus();
+    this.showHud(`${recolored ? "trecho" : "tinta"}: ${INK_LABELS[ink]}`);
+  }
+
+  /** recolorir não muda o texto, mas o lateral precisa ser gravado */
+  private markInkDirty(): void {
+    if (!this.note || this.isGuide(this.note.path)) return;
+    this.saveState = "pending";
+    this.autosave.markDirty();
   }
 
   /** no typewriter real, foco/typewriter/sidebar/zen não se aplicam */

@@ -11,6 +11,7 @@
       onDocChanged: (getText, delta) => workspace.onDocChanged(getText, delta),
       onSave: () => void workspace.saveNow(),
       onPageInfo: (info) => workspace.onPageInfo(info),
+      onCarriage: (events) => workspace.onCarriage(events),
     });
     workspace.attachEditor(editor);
     return () => editor.destroy();

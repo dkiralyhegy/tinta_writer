@@ -19,6 +19,8 @@ import { countChars, countWords } from "../../domain/services/word-count";
 import type { WindowAppearance } from "../../application/ports/window-appearance";
 import type { Clock } from "../../application/ports/clock";
 import type { InkStore } from "../../application/ports/ink-store";
+import type { TypewriterSoundPlayer } from "../../application/ports/typewriter-sounds";
+import type { CarriageEvent } from "../../domain/services/carriage";
 import {
   FRESH_INK_SESSION,
   loadInk,
@@ -60,6 +62,7 @@ export interface WorkspaceDeps {
   clock: Clock;
   windowAppearance: WindowAppearance;
   inkStore: InkStore;
+  sounds: TypewriterSoundPlayer;
   /** abre o dialog nativo de escolher pasta; null se cancelado */
   pickFolder: () => Promise<string | null>;
 }
@@ -108,6 +111,7 @@ export class Workspace {
   private inkSession: InkSession = FRESH_INK_SESSION;
   /** trechos da nota aberta, para o editor que ainda vai montar (attachEditor) */
   private openInkRuns: InkRun[] = [];
+  private soundWarned = false;
 
   constructor(private readonly deps: WorkspaceDeps) {
     this.autosave = new Autosave(() => this.persistCurrentNote(), 1000);
@@ -140,6 +144,7 @@ export class Workspace {
       }
     }
     if (firstLaunch) this.openGuide();
+    this.syncSounds();
     this.ready = true;
   }
 
@@ -542,6 +547,23 @@ export class Workspace {
     this.applyThemeToDom();
     this.editor?.applyConfig(this.theme);
     this.persistSettings();
+    this.syncSounds();
+  }
+
+  /** sons ligados só no typewriter real; carrega na primeira entrada */
+  private syncSounds(): void {
+    const on = this.isRealTypewriter && this.theme.typewriterSound;
+    this.deps.sounds.configure(on, this.theme.typewriterVolume);
+    if (!on) return;
+    void this.deps.sounds.load().then((ok) => {
+      if (ok || this.soundWarned) return;
+      this.soundWarned = true;
+      this.showHud("sons indisponíveis");
+    });
+  }
+
+  onCarriage(events: CarriageEvent[]): void {
+    for (const e of events) this.deps.sounds.play(e);
   }
 
   updateGoals(partial: Partial<Goals>): void {

@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "tinta",
@@ -18,7 +19,8 @@
         "minWidth": 600,
         "minHeight": 400,
         "titleBarStyle": "Overlay",
-        "hiddenTitle": true
+        "hiddenTitle": true,
+        "transparent": true
       }
     ],
     "security": {

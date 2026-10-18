@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ACCENTS, EDITOR_FONTS, WORKSPACE_STYLES } from "../domain/entities/theme-config";
+  import { ACCENTS, EDITOR_FONTS, WINDOW_BLURS, WORKSPACE_STYLES } from "../domain/entities/theme-config";
   import { WORKSPACE_STYLE_LABELS, type Workspace } from "./stores/workspace.svelte";
 
   let { workspace }: { workspace: Workspace } = $props();
@@ -36,6 +36,28 @@
           </button>
         {/each}
       </div>
+      {#if theme.workspaceStyle === "transparent"}
+        <p class="eyebrow label sub">opacidade do fundo — {Math.round(theme.windowOpacity * 100)}%</p>
+        <input
+          type="range"
+          min="0.15"
+          max="1"
+          step="0.05"
+          value={theme.windowOpacity}
+          oninput={(e) => workspace.updateTheme({ windowOpacity: Number(e.currentTarget.value) })}
+        />
+        <p class="eyebrow label sub">desfoque</p>
+        <div class="segmented">
+          {#each WINDOW_BLURS as blur (blur)}
+            <button
+              class:on={theme.windowBlur === blur}
+              onclick={() => workspace.updateTheme({ windowBlur: blur })}
+            >
+              {{ off: "off", light: "leve", strong: "forte" }[blur]}
+            </button>
+          {/each}
+        </div>
+      {/if}
     </section>
     <section>
       <p class="eyebrow label">modo</p>
@@ -307,6 +329,10 @@
 </aside>
 
 <style>
+  .sub {
+    margin-top: var(--ab-space-4);
+  }
+
   .panel {
     width: 264px;
     flex: none;

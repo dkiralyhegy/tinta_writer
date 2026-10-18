@@ -1,0 +1,18 @@
+/* ─────────────────────────────────────────────────────────────────
+   estilo transparência — o fundo fica translúcido (a janela é
+   transparent no Tauri); as cores de texto não mudam, então as letras
+   seguem 100% opacas. Chrome um pouco mais opaco para legibilidade.
+   ─────────────────────────────────────────────────────────────── */
+
+:root[data-style="transparent"] body {
+  background: color-mix(in srgb, var(--ab-bg) var(--tinta-window-alpha), transparent);
+}
+
+:root[data-style="transparent"] {
+  --tinta-panel-bg: color-mix(in srgb, var(--ab-bg) var(--tinta-chrome-alpha), transparent);
+}
+
+:root[data-style="transparent"] .statusbar,
+:root[data-style="transparent"] .topbar {
+  background: color-mix(in srgb, var(--ab-bg) var(--tinta-chrome-alpha), transparent);
+}

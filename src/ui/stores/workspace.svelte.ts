@@ -14,6 +14,7 @@ import {
 } from "../../domain/entities/writing-stats";
 import { goalProgressOf } from "../../domain/services/stats-calculator";
 import { countChars, countWords } from "../../domain/services/word-count";
+import type { WindowAppearance } from "../../application/ports/window-appearance";
 import type { Clock } from "../../application/ports/clock";
 import type { NoteRepository } from "../../application/ports/note-repository";
 import type { PersistedSettings, SettingsStore } from "../../application/ports/settings-store";
@@ -44,6 +45,7 @@ export interface WorkspaceDeps {
   settingsStore: SettingsStore;
   tracker: ProgressTracker;
   clock: Clock;
+  windowAppearance: WindowAppearance;
   /** abre o dialog nativo de escolher pasta; null se cancelado */
   pickFolder: () => Promise<string | null>;
 }
@@ -538,6 +540,12 @@ export class Workspace {
     const root = document.documentElement;
     root.dataset.accent = this.theme.accent;
     root.dataset.style = this.theme.workspaceStyle;
+    const alpha = (n: number) => `${Math.round(Math.min(1, n) * 100)}%`;
+    root.style.setProperty("--tinta-window-alpha", alpha(this.theme.windowOpacity));
+    root.style.setProperty("--tinta-chrome-alpha", alpha(this.theme.windowOpacity + 0.15));
+    const blur = this.theme.workspaceStyle === "transparent" ? this.theme.windowBlur : "off";
+    // sem desfoque nativo, a transparência ainda funciona — falha silenciosa
+    void this.deps.windowAppearance.setBlur(blur).catch(() => {});
 
     if (!this.systemDark) {
       this.systemDark = window.matchMedia("(prefers-color-scheme: dark)");

@@ -10,9 +10,11 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./ui/styles/fonts.css";
 import "./ui/styles/tokens.css";
 import "./ui/styles/app.css";
+import "./ui/styles/style-transparent.css";
 
 import { systemClock } from "./application/ports/clock";
 import { ProgressTracker } from "./application/use-cases/track-progress";
+import { TauriWindowAppearance } from "./infrastructure/tauri/tauri-window-appearance";
 import { TauriNoteRepository } from "./infrastructure/tauri/tauri-note-repository";
 import { TauriSettingsStore } from "./infrastructure/tauri/tauri-settings-store";
 import { TauriStatsStore } from "./infrastructure/tauri/tauri-stats-store";
@@ -29,6 +31,7 @@ const workspace = new Workspace({
   settingsStore,
   tracker,
   clock: systemClock,
+  windowAppearance: new TauriWindowAppearance(),
   pickFolder: async () => {
     const result = await open({ directory: true, multiple: false, title: "Escolher biblioteca" });
     return typeof result === "string" ? result : null;

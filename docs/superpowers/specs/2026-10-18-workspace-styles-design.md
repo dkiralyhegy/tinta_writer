@@ -352,8 +352,8 @@ fundo opaco, então nada muda visualmente neles. Nota para o PR:
 
 **Opacidade.** Em `[data-style="transparent"]`: `body`, sidebar, status
 bar e painel usam
-`color-mix(in srgb, var(--ab-bg) calc(var(--tinta-window-opacity) * 100%), transparent)`;
-sidebar/status bar/painel com +15 pontos de opacidade para legibilidade.
+`color-mix(in srgb, var(--ab-bg) var(--tinta-window-alpha), transparent)`;
+sidebar/status bar/painel com +15 pontos de opacidade (`--tinta-chrome-alpha`) para legibilidade.
 As cores de texto não mudam → letras 100% opacas.
 
 **Desfoque.** Porta `WindowAppearance { setBlur(level: WindowBlur): Promise<void> }`.

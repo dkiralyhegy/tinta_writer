@@ -122,8 +122,9 @@ Regras:
 - Trechos não se sobrepõem e são normalizados após toda operação
   (adjacentes de mesma cor se fundem, vazios somem).
 - Trechos podem atravessar linhas (não há restrição de sintaxe).
-- Copiar/colar leva só o texto (sem cor); colar dentro de um trecho
-  colorido herda a cor dele, como digitar.
+- Copiar/colar leva só o texto (sem cor). Fora do typewriter real, texto
+  inserido dentro ou no fim de um trecho colorido herda a cor dele; no
+  typewriter real, texto inserido sempre recebe a tinta ativa (preta corta o trecho).
 
 API do serviço `domain/services/ink-runs.ts` (pura, sem dependências):
 
@@ -156,8 +157,8 @@ Tauri sobre commands Rust novos em `src-tauri/src/commands/ink.rs`:
 `read_ink`, `write_ink` (escrita atômica como `write_note_atomic`; cria
 diretórios; `null` apaga o arquivo), `move_ink` (arquivo ou subárvore) e
 `trash_ink` (Lixeira, como as notas). O lateral é gravado **no mesmo
-autosave da nota**, logo depois dela, e só quando os trechos mudaram desde a
-última gravação. Ciclo de vida acompanhando a nota no `Workspace`:
+autosave da nota**, logo depois dela, e só quando a serialização (trechos + hash do conteúdo) mudou desde a
+última gravação; notas sem cor nunca geram I/O de tinta. Ciclo de vida acompanhando a nota no `Workspace`:
 renomear/mover nota ou pasta → `move_ink`; excluir → `trash_ink`;
 conflito externo → os trechos vão junto para a nota `.conflict`; o guia
 (nota virtual) nunca grava lateral. Snapshots continuam só de texto.
@@ -202,7 +203,7 @@ src/ui/styles/style-typewriter-real.css    NOVO
 src/ui/styles/style-transparent.css        NOVO
 src/ui/styles/style-paper.css              NOVO
 src/assets/fonts/CourierPrime-*.ttf        NOVO (SIL OFL)
-public/sounds/*.ogg                        NOVO (CC0)
+public/sounds/*.m4a                        NOVO (CC0)
 SOUNDS-NOTICE.md                           NOVO atribuição/licença dos sons
 src-tauri/tauri.conf.json                  transparent + macOSPrivateApi
 src-tauri/Cargo.toml                       feature macos-private-api
@@ -211,8 +212,7 @@ README.md, src/ui/content/guide.ts         documentar ⌘E e ⌘⇧I
 ```
 
 **DOM.** `applyThemeToDom()` grava `data-style="<estilo>"` no `<html>`
-(como `data-theme`/`data-accent`) e a opacidade em
-`--tinta-window-opacity`. Cada estilo tem seu CSS por seletor de atributo.
+(como `data-theme`/`data-accent`) e a opacidade em `--tinta-window-alpha` / `--tinta-chrome-alpha` (porcentagens). Cada estilo tem seu CSS por seletor de atributo.
 
 **Editor.** `CmEditor` ganha:
 - `styleModeCompartment`: `realTypewriter(config, sounds)`, `paperPages()`
@@ -270,7 +270,7 @@ som de recuo.
 
 **Desgaste da tinta.** Mark decorations por caractere, **só nas
 `visibleRanges`**, com valores **determinísticos** a partir de
-`hash(posição no doc, caractere)` — nada treme em repaint; a mesma letra
+`hash(caractere, 3 caracteres anteriores)` — digitar adiante nunca altera letras já batidas — nada treme em repaint; a mesma letra
 na mesma posição é sempre igual. Por caractere (escalado por `inkWear`):
 
 - opacidade 0.78–1.0;
@@ -298,12 +298,12 @@ estilo.
 
 | Evento | Arquivo(s) |
 |---|---|
-| tecla | `key-1..4.ogg` (sorteada; tom ±5%, volume ±15%) |
-| espaço | `space.ogg` |
-| retorno do carro | `return.ogg` |
-| ding | `bell.ogg` |
-| avanço de linha | `ratchet.ogg` |
-| backspace | `backspace.ogg` |
+| tecla | `key-1..4.m4a` (sorteada; tom ±5%, volume ±15%) |
+| espaço | `space.m4a` |
+| retorno do carro | `return.m4a` |
+| ding | `bell.m4a` |
+| avanço de linha | `ratchet.m4a` |
+| backspace | `backspace.m4a` |
 
 Ganho mestre = `typewriterVolume`; `typewriterSound = false` não carrega
 nada. Samples **CC0**, com fonte e licença de cada arquivo em

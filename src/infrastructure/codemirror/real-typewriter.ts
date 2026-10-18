@@ -1,5 +1,18 @@
-import { EditorSelection, type Extension } from "@codemirror/state";
-import { EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
+import {
+  EditorSelection,
+  type Extension,
+  type Range,
+  StateEffect,
+  StateField,
+} from "@codemirror/state";
+import {
+  Decoration,
+  type DecorationSet,
+  EditorView,
+  ViewPlugin,
+  type ViewUpdate,
+} from "@codemirror/view";
+import { wearFor } from "../../domain/services/ink-wear";
 import {
   carriageEvents,
   type CarriageAction,
@@ -97,6 +110,7 @@ function carriagePlugin(hooks: TypewriterHooks) {
               events = r.events;
               this.bellRung = r.bellRung;
               if (events.length) hooks.onEvents(events);
+              if (events.includes("key") || events.includes("space")) jolt(v.dom);
             }
             this.prev = m.snapshot;
 
@@ -126,6 +140,129 @@ function carriagePlugin(hooks: TypewriterHooks) {
   );
 }
 
-export function realTypewriter(hooks: TypewriterHooks, _wear: number): Extension {
-  return [EditorView.editorAttributes.of({ class: "tinta-tw-real" }), carriagePlugin(hooks)];
+const isSpaceChar = (ch: string) => ch === " " || ch === "\t";
+
+/**
+ * Uma mark por caractere, só nas visibleRanges. Palavras viram nowrap
+ * para que as letras possam ser inline-block (rotação) sem quebrar no meio.
+ * As palavras vão por outerDecorations: no CodeMirror, precedência maior =
+ * nó DOM mais interno, e a palavra precisa ENVOLVER as letras.
+ */
+function wearPlugin(wear: number) {
+  const word = Decoration.mark({ class: "tw-word" });
+  const plugin = ViewPlugin.fromClass(
+    class {
+      chars: DecorationSet = Decoration.none;
+      words: DecorationSet = Decoration.none;
+      constructor(view: EditorView) {
+        this.build(view);
+      }
+      update(u: ViewUpdate) {
+        if (u.docChanged || u.viewportChanged) this.build(u.view);
+      }
+      build(view: EditorView): void {
+        if (wear <= 0) {
+          this.chars = this.words = Decoration.none;
+          return;
+        }
+        const out: Range<Decoration>[] = [];
+        const words: Range<Decoration>[] = [];
+        for (const { from, to } of view.visibleRanges) {
+          for (let pos = from; pos <= to; ) {
+            const line = view.state.doc.lineAt(pos);
+            const end = Math.min(line.to, to);
+            const text = line.text;
+            let wordStart = -1;
+            for (let p = pos; p < end; p++) {
+              const i = p - line.from;
+              const ch = text[i]!;
+              if (isSpaceChar(ch)) {
+                if (wordStart >= 0) words.push(word.range(wordStart, p));
+                wordStart = -1;
+                continue;
+              }
+              if (wordStart < 0) wordStart = p;
+              const w = wearFor(ch.charCodeAt(0), text.slice(Math.max(0, i - 3), i), wear)!;
+              out.push(
+                Decoration.mark({
+                  class: w.faint ? "tw-ch tw-faint" : "tw-ch",
+                  attributes: {
+                    style: `--o:${w.opacity.toFixed(3)};--dy:${w.dy.toFixed(2)}px;--r:${w.rot.toFixed(2)}deg;--bleed:${w.bleed.toFixed(2)}px`,
+                  },
+                }).range(p, p + 1),
+              );
+            }
+            if (wordStart >= 0) words.push(word.range(wordStart, end));
+            pos = line.to + 1;
+          }
+        }
+        this.chars = Decoration.set(out, true);
+        this.words = Decoration.set(words, true);
+      }
+    },
+    { decorations: (v) => v.chars },
+  );
+  return [
+    plugin,
+    EditorView.outerDecorations.of((view) => view.plugin(plugin)?.words ?? Decoration.none),
+  ];
+}
+
+/** letra recém-batida: classe por ~80 ms para a animação de impacto */
+const addStrike = StateEffect.define<{ from: number; to: number }>();
+const clearStrike = StateEffect.define<null>();
+const strikeMark = Decoration.mark({ class: "tw-strike" });
+
+const strikeField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(value, tr) {
+    let deco = value.map(tr.changes);
+    for (const e of tr.effects) {
+      if (e.is(clearStrike)) deco = Decoration.none;
+      if (e.is(addStrike) && e.value.to > e.value.from)
+        deco = Decoration.set([strikeMark.range(e.value.from, e.value.to)]);
+    }
+    return deco;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
+const strikeOnInput = EditorView.updateListener.of((u) => {
+  const typed = u.transactions.some((t) => t.isUserEvent("input.type"));
+  if (!typed) return;
+  let range: { from: number; to: number } | null = null;
+  u.changes.iterChanges((_a, _b, fromB, toB) => {
+    if (toB > fromB) range = { from: fromB, to: toB };
+  });
+  if (!range) return;
+  const view = u.view;
+  // dispatch dentro de um update é proibido — agenda. Ao rodar, o estilo pode
+  // ter sido deixado (extensão removida) ou a view destruída: só despacha se o
+  // campo ainda estiver instalado.
+  const active = () => view.state.field(strikeField, false) !== undefined;
+  requestAnimationFrame(() => {
+    if (!active()) return;
+    view.dispatch({ effects: addStrike.of(range!) });
+    setTimeout(() => {
+      if (!active()) return;
+      view.dispatch({ effects: clearStrike.of(null) });
+    }, 80);
+  });
+});
+
+/** tranco de 1 px na folha a cada batida */
+function jolt(dom: HTMLElement) {
+  dom.classList.remove("tw-jolt");
+  void dom.offsetWidth; // reinicia a animação
+  dom.classList.add("tw-jolt");
+}
+
+export function realTypewriter(hooks: TypewriterHooks, wear: number): Extension {
+  return [
+    EditorView.editorAttributes.of({ class: "tinta-tw-real" }),
+    carriagePlugin(hooks),
+    wearPlugin(wear),
+    strikeField,
+    strikeOnInput,
+  ];
 }

@@ -97,3 +97,60 @@
     animation: none;
   }
 }
+
+/* desgaste da tinta (vars por caractere vêm do plugin) */
+.tinta-tw-real .tw-word {
+  white-space: nowrap;
+}
+
+.tinta-tw-real .tw-ch {
+  display: inline-block;
+  opacity: var(--o, 1);
+  transform: translateY(var(--dy, 0)) rotate(var(--r, 0));
+  text-shadow:
+    var(--tw-bold-shadow, 0 0 0 transparent),
+    0 0 var(--bleed, 0) currentColor;
+}
+
+/* batida fraca: a metade de baixo da letra mais clara */
+.tinta-tw-real .tw-faint {
+  background: linear-gradient(
+    to bottom,
+    currentColor 55%,
+    color-mix(in srgb, currentColor 45%, transparent) 55%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* impacto da tecla */
+.tinta-tw-real .tw-strike .tw-ch,
+.tinta-tw-real .tw-strike {
+  animation: tw-strike 60ms ease-out;
+}
+
+@keyframes tw-strike {
+  from {
+    opacity: 0.4;
+    transform: translateY(var(--dy, 0)) rotate(var(--r, 0)) scale(1.08);
+  }
+}
+
+.tinta-tw-real.tw-jolt {
+  animation: tw-jolt 70ms ease-out;
+}
+
+@keyframes tw-jolt {
+  50% {
+    transform: translateY(1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tinta-tw-real .tw-strike,
+  .tinta-tw-real .tw-strike .tw-ch,
+  .tinta-tw-real.tw-jolt {
+    animation: none;
+  }
+}

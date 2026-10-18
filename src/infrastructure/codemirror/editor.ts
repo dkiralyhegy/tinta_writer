@@ -6,7 +6,10 @@ import {
   type Text,
 } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import type { ThemeConfig } from "../../domain/entities/theme-config";
+import type { Ink, ThemeConfig } from "../../domain/entities/theme-config";
+import type { InkRun } from "../../domain/services/ink-runs";
+import { inkDecorations } from "./ink";
+import { inkField, inkRunsOf, recolorSelectionSpec, setInkMode, type InkMode } from "./ink-field";
 import type { PosLexicon } from "../../domain/services/pos-lexicon";
 import { wordDelta } from "../../domain/services/word-count";
 import { focusMode } from "./focus-mode";
@@ -29,6 +32,12 @@ export interface EditorEvents {
   onSave(): void;
   /** folha atual / total no estilo papel; null fora dele */
   onPageInfo?(info: PageInfo | null): void;
+}
+
+/** só o typewriter real escolhe tinta; nos outros estilos o texto herda a cor */
+function inkModeOf(config: ThemeConfig): InkMode {
+  const choose = config.workspaceStyle === "typewriter-real";
+  return { choose, active: choose ? config.ink : "black" };
 }
 
 /** o que muda a extensão do estilo: o próprio estilo e o desgaste da tinta */
@@ -79,7 +88,7 @@ export class CmEditor {
     this.view = new EditorView({ parent, state: this.makeState("") });
   }
 
-  private makeState(content: string): EditorState {
+  private makeState(content: string, inkRuns: readonly InkRun[] = []): EditorState {
     this.appliedStyleKey = styleKeyOf(this.config);
     return EditorState.create({
       doc: content,
@@ -104,6 +113,8 @@ export class CmEditor {
         this.posCompartment.of(this.posExtension(this.config)),
         this.grammarCompartment.of(this.config.grammarCheck ? grammarExtension() : []),
         this.styleModeCompartment.of(this.styleExtension(this.config)),
+        inkField(inkRuns, inkModeOf(this.config)),
+        inkDecorations,
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
           let delta = 0;
@@ -122,7 +133,7 @@ export class CmEditor {
   }
 
   /** Abre um documento, restaurando estado (undo/scroll) se cacheado e íntegro. */
-  openDocument(path: string, content: string): void {
+  openDocument(path: string, content: string, inkRuns: readonly InkRun[] = []): void {
     if (this.currentPath) this.stateCache.set(this.currentPath, this.view.state);
 
     const cached = this.stateCache.get(path);
@@ -132,7 +143,7 @@ export class CmEditor {
       this.appliedStyleKey = null;
       this.applyConfig(this.config);
     } else {
-      this.view.setState(this.makeState(content));
+      this.view.setState(this.makeState(content, inkRuns));
     }
     this.currentPath = path;
     this.view.focus();
@@ -154,6 +165,18 @@ export class CmEditor {
     return this.view.state.doc.toString();
   }
 
+  currentInkRuns(): InkRun[] {
+    return inkRunsOf(this.view.state);
+  }
+
+  /** recolore a seleção; false se não há seleção */
+  recolorSelection(ink: Ink): boolean {
+    const spec = recolorSelectionSpec(this.view.state, ink);
+    if (!spec) return false;
+    this.view.dispatch(spec);
+    return true;
+  }
+
   applyConfig(config: ThemeConfig): void {
     this.config = config;
     const effects: StateEffect<unknown>[] = [
@@ -166,6 +189,7 @@ export class CmEditor {
       this.styleCompartment.reconfigure(config.styleCheck ? styleCheck() : []),
       this.posCompartment.reconfigure(this.posExtension(config)),
       this.grammarCompartment.reconfigure(config.grammarCheck ? grammarExtension() : []),
+      setInkMode.of(inkModeOf(config)),
     ];
     const key = styleKeyOf(config);
     if (key !== this.appliedStyleKey) {

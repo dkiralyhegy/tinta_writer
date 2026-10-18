@@ -210,3 +210,17 @@ select {
 .cm-editor ::selection {
   background: var(--tinta-selection);
 }
+
+/* tinta por trecho — a cor vive no lateral .ink/, nunca na nota */
+:root {
+  --tinta-ink-blue: #1f3a93;
+  --tinta-ink-red: #a3231f;
+}
+
+:root[data-theme="dark"] {
+  --tinta-ink-blue: #7f9be0;
+  --tinta-ink-red: #e0675f;
+}
+
+.cm-ink-blue { color: var(--tinta-ink-blue); }
+.cm-ink-red { color: var(--tinta-ink-red); }

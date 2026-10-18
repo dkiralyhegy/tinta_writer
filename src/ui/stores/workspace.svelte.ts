@@ -26,9 +26,10 @@ import { pruneSnapshots } from "../../application/use-cases/prune-snapshots";
 import { saveNote } from "../../application/use-cases/save-note";
 import type { ProgressTracker } from "../../application/use-cases/track-progress";
 import type { CmEditor } from "../../infrastructure/codemirror/editor";
+import type { PageInfo } from "../../infrastructure/codemirror/paper-pages";
 import { GrammarSession } from "../../infrastructure/languagetool/grammar-session";
 import { LanguageToolChecker } from "../../infrastructure/languagetool/lt-checker";
-import type { PageInfo } from "../../infrastructure/codemirror/paper-pages";import { loadPosLexicon } from "../../infrastructure/pos/lexicon-loader";
+import { loadPosLexicon } from "../../infrastructure/pos/lexicon-loader";
 import { GUIDE_PATH, GUIDE_TEXT, GUIDE_TITLE } from "../content/guide";
 
 export type SaveState = "idle" | "pending" | "saved" | "error" | "conflict";
@@ -317,11 +318,11 @@ export class Workspace {
 
   // ── edição / autosave ────────────────────────────────────────────
 
-  /** chamado pelo CmEditor a cada transação que muda o doc */
   onPageInfo(info: PageInfo | null): void {
     this.pageInfo = info;
   }
 
+  /** chamado pelo CmEditor a cada transação que muda o doc */
   onDocChanged(getText: () => string, wordDelta: number): void {
     const note = this.note;
     if (!note) return;

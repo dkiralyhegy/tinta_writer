@@ -17,7 +17,10 @@ import {
   type ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
-import { computePageBreaks } from "../../domain/services/page-breaks";
+import {
+  computePageBreaks,
+  spacerHeights,
+} from "../../domain/services/page-breaks";
 
 export interface PageInfo {
   page: number;
@@ -40,6 +43,8 @@ interface Layout {
   /** números de linha (1-based) que abrem folha nova */
   breakLines: number[];
   sheets: Sheet[];
+  /** alturas dos espaçadores entre folhas, na ordem das folhas */
+  spacers: number[];
   sheetLeft: number;
   sheetWidth: number;
 }
@@ -48,6 +53,7 @@ const EMPTY: Layout = {
   decorations: Decoration.none,
   breakLines: [],
   sheets: [],
+  spacers: [],
   sheetLeft: 0,
   sheetWidth: 0,
 };
@@ -80,7 +86,9 @@ const layoutField = StateField.define<Layout>({
   create: () => EMPTY,
   update(value, tr) {
     for (const e of tr.effects) if (e.is(setLayout)) return e.value;
-    return tr.docChanged ? { ...value, decorations: value.decorations.map(tr.changes) } : value;
+    return tr.docChanged
+      ? { ...value, decorations: value.decorations.map(tr.changes) }
+      : value;
   },
   provide: (f) => EditorView.decorations.from(f, (v) => v.decorations),
 });
@@ -118,20 +126,26 @@ function measureLayout(view: EditorView): Layout {
 
   const widgets: Range<Decoration>[] = [];
   const spacer = (pos: number, height: number, side: number) =>
-    widgets.push(Decoration.widget({ widget: new Spacer(height), block: true, side }).range(pos));
+    widgets.push(
+      Decoration.widget({
+        widget: new Spacer(height),
+        block: true,
+        side,
+      }).range(pos),
+    );
 
   spacer(0, margin, -1);
   const sheets: Sheet[] = [];
   let top = 0;
+  const spacers = spacerHeights(pageHeights, pageContent, margin, GAP);
   pageHeights.forEach((used, p) => {
     const height = Math.max(pageContent, used) + 2 * margin;
     sheets.push({ top, height });
-    const rest = Math.max(0, pageContent - used) + margin;
     const lineIndex = breakBefore[p];
     if (lineIndex !== undefined) {
-      spacer(state.doc.line(lineIndex + 1).from, rest + GAP + margin, -1);
+      spacer(state.doc.line(lineIndex + 1).from, spacers[p]!, -1);
     } else {
-      spacer(state.doc.length, rest + GAP, 1);
+      spacer(state.doc.length, spacers[p]!, 1);
     }
     top += height + GAP;
   });
@@ -141,8 +155,14 @@ function measureLayout(view: EditorView): Layout {
   return {
     decorations: Decoration.set(widgets, true),
     breakLines: breakBefore.map((i) => i + 1),
+    spacers,
     sheets: sheets.map((s) => ({ top: s.top + docOffset, height: s.height })),
-    sheetLeft: content.left - scroller.left + view.scrollDOM.scrollLeft + CONTENT_PAD_X - margin,
+    sheetLeft:
+      content.left -
+      scroller.left +
+      view.scrollDOM.scrollLeft +
+      CONTENT_PAD_X -
+      margin,
     sheetWidth,
   };
 }
@@ -150,11 +170,17 @@ function measureLayout(view: EditorView): Layout {
 function sameLayout(a: Layout, b: Layout): boolean {
   if (a.breakLines.join() !== b.breakLines.join()) return false;
   if (a.sheets.length !== b.sheets.length) return false;
-  if (Math.abs(a.sheetLeft - b.sheetLeft) > 0.5 || Math.abs(a.sheetWidth - b.sheetWidth) > 0.5)
+  if (a.spacers.length !== b.spacers.length) return false;
+  if (a.spacers.some((h, i) => Math.abs(h - b.spacers[i]!) > 0.5)) return false;
+  if (
+    Math.abs(a.sheetLeft - b.sheetLeft) > 0.5 ||
+    Math.abs(a.sheetWidth - b.sheetWidth) > 0.5
+  )
     return false;
   return a.sheets.every(
     (s, i) =>
-      Math.abs(s.top - b.sheets[i]!.top) < 0.5 && Math.abs(s.height - b.sheets[i]!.height) < 0.5,
+      Math.abs(s.top - b.sheets[i]!.top) < 0.5 &&
+      Math.abs(s.height - b.sheets[i]!.height) < 0.5,
   );
 }
 
@@ -199,16 +225,23 @@ const sheetsLayer = layer({
   class: "tinta-paper-layer",
   markers(view) {
     const l = view.state.field(layoutField);
-    return l.sheets.map((s, i) => new SheetMarker(l.sheetLeft, s.top, l.sheetWidth, s.height, i + 1));
+    return l.sheets.map(
+      (s, i) =>
+        new SheetMarker(l.sheetLeft, s.top, l.sheetWidth, s.height, i + 1),
+    );
   },
   update(update) {
-    return update.startState.field(layoutField) !== update.state.field(layoutField);
+    return (
+      update.startState.field(layoutField) !== update.state.field(layoutField)
+    );
   },
 });
 
 function pageOf(state: EditorState, pos: number): number {
   const line = state.doc.lineAt(pos).number;
-  return 1 + state.field(layoutField).breakLines.filter((n) => n <= line).length;
+  return (
+    1 + state.field(layoutField).breakLines.filter((n) => n <= line).length
+  );
 }
 
 /**
@@ -220,12 +253,23 @@ export function paperPages(onPageInfo: (info: PageInfo) => void): Extension {
   const plugin = ViewPlugin.fromClass(
     class {
       private lastInfo = "";
+      private destroyed = false;
       constructor(view: EditorView) {
         this.schedule(view);
+        // setState recria o plugin: sem isto a barra de status guarda a nota anterior
+        this.report(view);
+      }
+      destroy() {
+        this.destroyed = true;
       }
       update(u: ViewUpdate) {
-        if (u.docChanged || u.geometryChanged || u.viewportChanged) this.schedule(u.view);
-        if (u.selectionSet || u.docChanged || u.transactions.some((t) => t.effects.some((e) => e.is(setLayout))))
+        if (u.docChanged || u.geometryChanged || u.viewportChanged)
+          this.schedule(u.view);
+        if (
+          u.selectionSet ||
+          u.docChanged ||
+          u.transactions.some((t) => t.effects.some((e) => e.is(setLayout)))
+        )
           this.report(u.view);
       }
       schedule(view: EditorView) {
@@ -234,7 +278,10 @@ export function paperPages(onPageInfo: (info: PageInfo) => void): Extension {
           read: (v) => measureLayout(v),
           write: (layout, v) => {
             if (sameLayout(layout, v.state.field(layoutField))) return;
-            queueMicrotask(() => v.dispatch({ effects: setLayout.of(layout) }));
+            queueMicrotask(() => {
+              if (!this.destroyed)
+                v.dispatch({ effects: setLayout.of(layout) });
+            });
           },
         });
       }
@@ -250,5 +297,10 @@ export function paperPages(onPageInfo: (info: PageInfo) => void): Extension {
       }
     },
   );
-  return [layoutField, plugin, sheetsLayer, EditorView.editorAttributes.of({ class: "tinta-paper" })];
+  return [
+    layoutField,
+    plugin,
+    sheetsLayer,
+    EditorView.editorAttributes.of({ class: "tinta-paper" }),
+  ];
 }

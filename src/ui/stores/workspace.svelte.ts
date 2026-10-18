@@ -424,14 +424,15 @@ export class Workspace {
       if (outcome.conflictPath) {
         // o disco mudou por fora: nossa edição foi preservada no .conflict —
         // seguimos editando NELE; o arquivo original fica com a versão externa
-        this.conflictNotice = `O arquivo mudou fora do tinta. Suas alterações seguem aqui, salvas como ${outcome.conflictPath.split("/").pop()}.`;
-        this.saveState = "conflict";
+        const conflictNotice = `O arquivo mudou fora do tinta. Suas alterações seguem aqui, salvas como ${outcome.conflictPath.split("/").pop()}.`;
         this.editor?.forget(note.path);
         const conflictNote = await openNote(this.deps.repo, outcome.conflictPath);
         // as cores acompanham a edição preservada no .conflict (sessão nova)
         const inkSaved = await this.persistInk(conflictNote.path, text, runs, FRESH_INK_SESSION);
         // outra nota foi aberta durante os awaits: não a sobrescreve
         if (this.note?.path === note.path) {
+          this.conflictNotice = conflictNotice;
+          this.saveState = "conflict";
           this.note = conflictNote;
           this.inkSession = inkSaved ?? FRESH_INK_SESSION;
           this.openInkRuns = runs;
@@ -439,11 +440,14 @@ export class Workspace {
         }
         await this.refreshLibrary();
       } else {
-        this.note = outcome.note;
+        // outra nota pode ter sido aberta durante o save: só atualiza se ainda é esta
+        if (this.note?.path === note.path) this.note = outcome.note;
         const inkSaved = await this.persistInk(note.path, text, runs, session);
         // o resultado só vale se a nota ainda é a mesma
-        if (inkSaved && this.note?.path === note.path) this.inkSession = inkSaved;
-        if (this.saveState !== "pending" || !this.autosave.isDirty) this.saveState = "saved";
+        if (this.note?.path === note.path) {
+          if (inkSaved) this.inkSession = inkSaved;
+          if (this.saveState !== "pending" || !this.autosave.isDirty) this.saveState = "saved";
+        }
       }
       void this.deps.tracker.flush().catch(() => {});
     } catch (err) {
@@ -490,7 +494,8 @@ export class Workspace {
       return;
     }
     // sem edição pendente: recarrega silenciosamente a versão nova
-    const seq = ++this.openSeq;
+    // sem incrementar: uma abertura do usuário em andamento deve vencer
+    const seq = this.openSeq;
     try {
       const fresh = await openNote(this.deps.repo, current.path);
       const ink = await this.loadInkFor(fresh.path, fresh.content);
@@ -507,7 +512,7 @@ export class Workspace {
       this.recount(fresh.content);
     } catch {
       // arquivo apagado por fora
-      if (seq === this.openSeq) this.note = null;
+      if (seq === this.openSeq && this.note?.path === current.path) this.note = null;
     }
   }
 

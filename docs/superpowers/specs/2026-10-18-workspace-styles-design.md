@@ -16,8 +16,13 @@ alternado com `⌘E`, com quatro valores:
 4. **papel** — o texto em folhas A4 paginadas sobre uma mesa.
 
 Requisito de contribuição: tudo é **opt-in**. Quem nunca apertar `⌘E` não
-vê diferença nenhuma (o estilo padrão é `standard`, e o `.md` só ganha
-marcação quando o usuário usa tinta colorida).
+vê diferença nenhuma (o estilo padrão é `standard`).
+
+**Princípio inegociável: os arquivos de texto continuam puros.** O tinta
+escreve `.md`/`.txt` legíveis em qualquer lugar. Nenhuma feature desta spec
+grava marcação, metadado ou caractere extra dentro de uma nota. Estilos são
+só aparência; a cor da tinta vive num arquivo lateral (ver "Tinta por
+trecho").
 
 Fora de escopo: exportar PDF das páginas; cores de tinta além das três;
 escolher a tinta fora do typewriter real (o texto colorido aparece e se
@@ -69,61 +74,99 @@ números com clamp) e persistidos junto do tema:
 Constantes exportadas: `WORKSPACE_STYLES`, `INKS`, `WINDOW_BLURS`.
 Função pura `nextWorkspaceStyle(current): WorkspaceStyle` no mesmo arquivo.
 
-### Tinta por trecho — formato no `.md`
+### Tinta por trecho — arquivo lateral com âncoras
 
-Trechos coloridos são HTML inline válido em Markdown:
+A nota (`.md` ou `.txt`) **nunca** recebe marcação de cor. As cores ficam
+num arquivo lateral, oculto, espelhando a estrutura da biblioteca como o
+`.snapshots/` já faz:
 
-```md
-Texto preto <span style="color:#1f3a93">texto azul</span> e
-<span style="color:#a3231f">vermelho</span>.
+```
+<biblioteca>/livro/cap-01.md
+<biblioteca>/.ink/livro/cap-01.md.json
 ```
 
-Regras (implementadas em `domain/services/ink-spans.ts`):
+`.ink/` começa com ponto → já é ignorada pelo `scan_library` e o watcher
+só reage a `.md`/`.txt`, então a pasta não aparece na árvore nem dispara
+recargas. Preto é a ausência de registro: uma nota sem trechos coloridos
+não tem arquivo lateral (gravar zero trechos **apaga** o lateral).
 
-- **Preto nunca gera marcação.** Recolorir para preto remove o span.
-- Cores canônicas: azul `#1f3a93`, vermelho `#a3231f`. O parser aceita
-  maiúsculas/minúsculas, espaços em volta de `:` e `;` final. Qualquer outro
-  `<span>` (outra cor, outros atributos) **não é tinta** — fica como texto
-  comum/HTML e é renderizado como hoje.
-- **Sem aninhamento** e **sem atravessar linha**: um span abre e fecha na
-  mesma linha do documento. Recolorir um range multilinha gera um span por
-  linha. Isso mantém o Markdown inline válido em qualquer renderizador.
-- Markdown inline dentro do span (ex.: `**negrito**`) é permitido e
-  continua funcionando.
-- **Normalização** após toda operação: spans adjacentes de mesma cor se
-  fundem; spans vazios somem.
+Formato:
 
-API do serviço (pura, sem dependências externas):
+```json
+{
+  "version": 1,
+  "contentLength": 18234,
+  "contentHash": "fnv1a:8c1f2e9a",
+  "runs": [
+    { "ink": "blue", "from": 120, "to": 164,
+      "text": "texto que foi escrito em azul",
+      "prefix": "32 caracteres antes", "suffix": "32 caracteres depois" }
+  ]
+}
+```
+
+`from`/`to` são offsets no texto; `text`, `prefix` e `suffix` são a
+**âncora** (estilo Web Annotation "TextQuoteSelector") que permite
+reencontrar o trecho quando o arquivo foi editado fora do tinta.
+
+**Resolução ao abrir a nota** (`resolveRuns`, puro):
+1. **Caminho rápido**: `contentHash` e `contentLength` batem com o texto
+   atual → usa `from`/`to` direto.
+2. **Reancoragem**: para cada trecho, procura `text` no documento; com
+   várias ocorrências, escolhe a que melhor casa `prefix`/`suffix` e,
+   no empate, a mais próxima do `from` antigo.
+3. **Não encontrado** → o trecho é descartado. A cor some; o texto nunca
+   é afetado. Ao próximo save o lateral é regravado sem ele.
+
+Regras:
+- Trechos não se sobrepõem e são normalizados após toda operação
+  (adjacentes de mesma cor se fundem, vazios somem).
+- Trechos podem atravessar linhas (não há restrição de sintaxe).
+- Copiar/colar leva só o texto (sem cor); colar dentro de um trecho
+  colorido herda a cor dele, como digitar.
+
+API do serviço `domain/services/ink-runs.ts` (pura, sem dependências):
 
 ```ts
 type Ink = "black" | "blue" | "red";
-interface InkRun { from: number; to: number; ink: Ink }   // posições do TEXTO VISÍVEL
-interface InkTag { from: number; to: number }              // posições das tags no doc
+interface InkRun { from: number; to: number; ink: Exclude<Ink, "black"> }
+interface StoredInk { version: 1; contentLength: number; contentHash: string;
+                      runs: (InkRun & { text: string; prefix: string; suffix: string })[] }
 
-parseInkLine(line: string): { runs: InkRun[]; tags: InkTag[] }
-/** reescreve [from,to) do doc com a tinta dada; devolve as mudanças a aplicar */
-recolor(doc: string, from: number, to: number, ink: Ink): TextChange[]
-/** onde/como inserir texto digitado com a tinta ativa */
-insertWithInk(doc: string, pos: number, text: string, ink: Ink): TextChange[]
+resolveRuns(doc: string, stored: StoredInk | null): InkRun[]
+serializeRuns(doc: string, runs: InkRun[]): StoredInk | null   // null = sem trechos
+recolor(runs: InkRun[], from: number, to: number, ink: Ink): InkRun[]
+normalizeRuns(runs: InkRun[]): InkRun[]
+contentHash(doc: string): string                                // FNV-1a
 ```
 
-`TextChange = { from: number; to: number; insert: string }` — o adapter do
-CodeMirror traduz para `ChangeSpec`.
+**Em sessão (CodeMirror).** `infrastructure/codemirror/ink.ts` mantém os
+trechos num `StateField` mapeado pelas mudanças do documento (`mapPos`), então
+durante a edição dentro do tinta as posições são sempre exatas. Digitação:
+- texto inserido com tinta ativa ≠ preto → vira/estende um trecho da tinta
+  ativa;
+- texto inserido com tinta preta dentro de um trecho colorido → corta o
+  trecho ao redor do texto novo.
+O campo vive no `EditorState`, então o cache de estado por nota já
+preserva as cores (e o undo/redo das recolorações) ao trocar de nota.
 
-Comportamento de `insertWithInk`:
-- posição dentro de um span da mesma cor → insere direto;
-- vizinho imediato (antes ou depois) é span da mesma cor → insere dentro
-  dele, estendendo-o;
-- tinta preta dentro de um span colorido → fecha o span, insere, reabre;
-- caso contrário → `<span style="color:…">texto</span>`.
+**Persistência.** Porta nova `InkStore { load(root, notePath): Promise<StoredInk | null>;
+save(root, notePath, ink: StoredInk | null): Promise<void> }`, com adapter
+Tauri sobre commands Rust novos em `src-tauri/src/commands/ink.rs`:
+`read_ink`, `write_ink` (escrita atômica como `write_note_atomic`; cria
+diretórios; `null` apaga o arquivo), `move_ink` (arquivo ou subárvore) e
+`trash_ink` (Lixeira, como as notas). O lateral é gravado **no mesmo
+autosave da nota**, logo depois dela, e só quando os trechos mudaram desde a
+última gravação. Ciclo de vida acompanhando a nota no `Workspace`:
+renomear/mover nota ou pasta → `move_ink`; excluir → `trash_ink`;
+conflito externo → os trechos vão junto para a nota `.conflict`; o guia
+(nota virtual) nunca grava lateral. Snapshots continuam só de texto.
 
-**Exibição.** A extensão `inkSpans()` fica ativa em **todos** os estilos:
-pinta os trechos com a cor da tinta e esmaece as tags (como os demais
-marcadores markdown). No typewriter real as tags viram replace decorations
-**atômicas** (invisíveis; o cursor pula por cima). As cores canônicas
-mapeiam para CSS vars ajustadas por tema (`--tinta-ink-blue`,
-`--tinta-ink-red`), para continuarem legíveis no dark mode
-(azul `#7f9be0`, vermelho `#e0675f` sobre ink).
+**Exibição.** Decorações de cor em **todos** os estilos (o texto colorido
+aparece em qualquer modo, mas só dentro do tinta). As tintas mapeiam para
+CSS vars ajustadas por tema (`--tinta-ink-blue`, `--tinta-ink-red`):
+azul `#1f3a93` / vermelho `#a3231f` no claro; `#7f9be0` / `#e0675f` no
+escuro.
 
 **Escolher a tinta** só existe no typewriter real (indicador de fita +
 `⌘⇧I`). Nos outros estilos o texto colorido aparece, edita e se preserva,
@@ -136,12 +179,15 @@ implementa portas):
 
 ```
 src/domain/entities/theme-config.ts        + campos, constantes, nextWorkspaceStyle
-src/domain/services/ink-spans.ts           NOVO  parse/recolor/insert puros
+src/domain/services/ink-runs.ts            NOVO  resolve/serialize/recolor puros
 src/domain/services/page-breaks.ts         NOVO  cálculo puro de quebras de página
-src/application/ports/window-appearance.ts NOVO  porta: setTransparent/setBlur
+src/application/ports/window-appearance.ts NOVO  porta: setBlur
+src/application/ports/ink-store.ts         NOVO  porta: load/save do lateral
 src/infrastructure/tauri/tauri-window-appearance.ts  NOVO adapter (setEffects)
+src/infrastructure/tauri/tauri-ink-store.ts          NOVO adapter dos commands de tinta
 src/infrastructure/audio/typewriter-sounds.ts        NOVO Web Audio + pool de buffers
-src/infrastructure/codemirror/ink.ts                 NOVO inkSpans() + filtro de digitação
+src/infrastructure/codemirror/ink.ts                 NOVO StateField de trechos + decorações
+src-tauri/src/commands/ink.rs              NOVO  read/write/move/trash do lateral
 src/infrastructure/codemirror/real-typewriter.ts     NOVO carro, batida, desgaste
 src/infrastructure/codemirror/paper-pages.ts         NOVO espaçadores + layer de folhas
 src/infrastructure/codemirror/editor.ts    + styleModeCompartment, inkCompartment,
@@ -172,13 +218,17 @@ README.md, src/ui/content/guide.ts         documentar ⌘E e ⌘⇧I
 - `styleModeCompartment`: `realTypewriter(config, sounds)`, `paperPages()`
   ou `[]`. No typewriter real, os compartments de foco e typewriter são
   reconfigurados para `[]` e o tema dimensional usa Courier Prime / 65ch.
-- `inkCompartment`: `inkSpans({ hideTags, activeInk })`, sempre presente.
-- `setInk(ink)` e `recolorSelection(ink): boolean` (false se a seleção é
-  vazia) chamados pelo `Workspace`.
+- `inkCompartment`: `inkRuns({ activeInk })`, sempre presente.
+- `openDocument(path, content, inkRuns?)`: recebe os trechos já resolvidos.
+- `currentInkRuns(): InkRun[]`, `setInk(ink)` e
+  `recolorSelection(ink): boolean` (false se a seleção é vazia), chamados
+  pelo `Workspace`.
 
-O `Workspace` chama `deps.windowAppearance` ao trocar de estilo/opacidade/
-desfoque; `main.ts` injeta `TauriWindowAppearance` e o
-`TypewriterSounds` (este passado ao `CmEditor` via `EditorPane`).
+O `Workspace` carrega/grava o lateral via `deps.inkStore` (abrir nota →
+`load` + `resolveRuns`; autosave → `serializeRuns` + `save`) e chama
+`deps.windowAppearance` ao trocar de estilo/desfoque; `main.ts` injeta
+`TauriInkStore`, `TauriWindowAppearance` e o `TypewriterSounds` (este
+passado ao `CmEditor` via `EditorPane`).
 
 ## Typewriter real
 
@@ -236,10 +286,11 @@ azul `#1f3a93`, vermelho `#a3231f`.
 inferior direito, o ativo preenchido — único elemento de UI visível no
 estilo.
 - Sem seleção: clicar num ponto ou `⌘⇧I` (cicla preto→azul→vermelho)
-  troca a **tinta ativa**; o que for digitado depois sai nela (filtro de
-  transação em `ink.ts` aplica `insertWithInk`). HUD `tinta: azul`.
-- Com seleção: a mesma ação **recolore só o trecho** (`recolor`), e a tinta
-  ativa passa a ser essa cor.
+  troca a **tinta ativa**; o que for digitado depois sai nela (o
+  `StateField` de `ink.ts` estende/abre o trecho). HUD `tinta: azul`.
+- Com seleção: a mesma ação **recolore só o trecho** (`recolor`, em
+  transação própria → desfazível com `⌘Z`), e a tinta ativa passa a ser
+  essa cor.
 - A tinta ativa é persistida (`ink`).
 
 **Sons.** `TypewriterSounds` pré-carrega `AudioBuffer`s de
@@ -325,17 +376,29 @@ opacidade + desfoque; typewriter real: tinta, som, volume, desgaste).
 - Falha ao carregar áudio → estilo segue mudo; HUD `sons indisponíveis`
   uma vez por sessão.
 - Falha no `setEffects` → só a transparência (sem desfoque); sem HUD.
-- `<span>` malformado ou de cor desconhecida → texto comum, sem quebra.
+- Lateral de tinta ilegível/versão desconhecida → nota abre sem cores e o
+  lateral **não** é sobrescrito até o usuário colorir algo (não destrói
+  dado que talvez uma versão futura entenda).
+- Falha ao gravar o lateral → a nota em si já foi salva; HUD
+  `cores não salvas` e nova tentativa no próximo autosave.
 - Settings antigos sem os campos novos → defaults via `normalizeTheme`.
 
 ## Testes
 
 Vitest, sem DOM/Tauri/CodeMirror, como os existentes:
 
-- `tests/domain/ink-spans.test.ts`: parse (variações de grafia, spans não
-  canônicos ignorados), `recolor` (dentro de um span, cruzando spans,
-  parcial nas bordas, multilinha → um span por linha, para preto remove,
-  normalização/fusão), `insertWithInk` (todos os casos acima), round-trip.
+- `tests/domain/ink-runs.test.ts`: `recolor` (dentro de um trecho,
+  cruzando trechos, parcial nas bordas, para preto remove, fusão),
+  `serializeRuns`/`resolveRuns` round-trip, caminho rápido por hash,
+  reancoragem após inserção/remoção antes do trecho, desempate por
+  prefix/suffix com ocorrências repetidas, trecho apagado → descartado,
+  zero trechos → `null`.
+- `tests/application/…`: save da nota grava o lateral só quando os trechos
+  mudaram; renomear/excluir acompanha o lateral (com `InMemoryInkStore`
+  fake, no padrão dos fakes existentes).
+- **Garantia do princípio**: teste que, para qualquer sequência de
+  recolorações, o conteúdo passado a `repo.writeAtomic` é idêntico ao
+  texto digitado (nenhum byte de cor na nota).
 - `tests/domain/page-breaks.test.ts`: doc vazio, tudo numa folha,
   parágrafo empurrado, parágrafo maior que folha, várias folhas.
 - `tests/domain/theme-config.test.ts`: novos campos (defaults, enums
@@ -346,12 +409,13 @@ paginação, cores em light/dark) + `npm run check` + `npm test`.
 
 ## Ordem de implementação sugerida
 
-1. Domínio: campos do tema, `nextWorkspaceStyle`, `ink-spans`,
+1. Domínio: campos do tema, `nextWorkspaceStyle`, `ink-runs`,
    `page-breaks` (com testes).
 2. ⌘E + `data-style` + chrome derivado + seção do painel.
 3. Transparência (Tauri config, porta, adapter, CSS).
 4. Papel.
-5. Tinta por trecho (`ink.ts`) em todos os estilos.
+5. Tinta por trecho: `ink.ts`, porta `InkStore`, commands Rust de tinta,
+   ciclo de vida no `Workspace`.
 6. Typewriter real: cena, carro, batida, desgaste, fita, painel mínimo.
 7. Sons + `SOUNDS-NOTICE.md`.
 8. README e guia.
